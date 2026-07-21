@@ -6,7 +6,20 @@ AI-powered bilingual mobile application for supportive early screening and perso
 
 ## Repository status
 
-This repository is a **GitHub and Claude Code starter package**. It includes the approved specification, Claude Code master prompt, knowledge bases, datasets, architecture/documentation placeholders, backend scaffolding, and CI configuration. Claude Code should implement the working Flutter and FastAPI product using `CLAUDE_CODE_PROMPT.md`.
+The **FastAPI backend is implemented and tested** (auth, child profiles, assessment, deterministic scoring, reports/PDF, weekly plans, follow-up/reassessment — see `docs/IMPLEMENTATION_STATUS.md` for the full breakdown). The Flutter mobile app has not been started yet.
+
+Run locally: see "How to run locally" in `docs/IMPLEMENTATION_STATUS.md`, or:
+
+```bash
+cd backend
+python -m venv .venv && source .venv/Scripts/activate
+pip install -r requirements.txt -r requirements-dev.txt
+cp .env.example .env   # then set SECRET_KEY
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+Then open `http://127.0.0.1:8000/docs`.
 
 ## Important files
 
