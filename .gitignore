@@ -36,6 +36,7 @@ frontend/playwright-report/
 frontend/test-results/
 frontend/blob-report/
 frontend/.vite/
+frontend/e2e/__screenshots__/
 *.local
 
 # Flutter / Dart
