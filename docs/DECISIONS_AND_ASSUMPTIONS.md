@@ -163,6 +163,18 @@ Every ownership check (child, assessment, report, weekly plan, followup) returns
 so a caller cannot distinguish "doesn't exist" from "isn't yours," which would otherwise leak
 the existence of other users' data.
 
+## Frontend session addendum (2026-07-22)
+
+### CORS origin update for the web frontend
+`CORS_ORIGINS` (`backend/.env`, `backend/.env.example`) changed from
+`["http://localhost:3000"]` (an unused placeholder — no frontend existed yet) to
+`["http://127.0.0.1:5173","http://localhost:5173"]`, matching the Vite dev server this
+session added at `frontend/`. Pure environment-variable/config change, no Python code
+touched: `app/main.py` already conditionally added `CORSMiddleware` with explicit
+`allow_origins` from `settings.cors_origins` and `allow_credentials=True` — never a
+wildcard. Covered by `tests/test_cors.py` (configured origin is allowed and echoed back;
+an unconfigured origin is not; wildcard-with-credentials is asserted absent).
+
 ## Remaining open items (not applicable to a backend-only session)
 - Embedding/retrieval implementation: not applicable — retrieval is deterministic
   metadata-filtered lookup (age, domain, ID), not embedding similarity search. No LLM
