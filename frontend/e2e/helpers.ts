@@ -48,29 +48,55 @@ export async function addChild(
   await page.getByLabel("الجنس").selectOption(gender);
   await page.getByLabel("لغة المنزل").fill("ar");
   await page.getByRole("button", { name: "حفظ" }).click();
-  await expect(page).toHaveURL(/\/children\/[^/]+$/);
+
+  // `/children/new` (the form itself, before submission) matches
+  // `/\/children\/[^/]+$/` just as validly as `/children/{realId}` does, so
+  // waiting on that URL pattern alone can resolve *before* the real
+  // post-creation navigation happens — `page.url()` then reads back the
+  // literal string "new" as the "child ID", which 404s on every subsequent
+  // request. Waiting for a heading that only ChildDetailPage renders avoids
+  // the ambiguity entirely.
+  await expect(page.getByRole("heading", { name: "ملف الطفل", exact: true })).toBeVisible();
   const url = page.url();
-  return url.split("/children/")[1]!.split(/[/?]/)[0]!;
+  const childId = url.split("/children/")[1]?.split(/[/?]/)[0];
+  if (!childId || childId === "new") {
+    throw new Error(`addChild: could not extract a real child ID from URL: ${url}`);
+  }
+  return childId;
 }
 
 export type AnswerPattern = "all-always" | "all-never" | "alternating";
 
 /**
- * Waits for the take-flow to settle into a definitive state — another
- * question is showing, or the result page has loaded — and reports which.
- * Checking `page.url()` synchronously right after a click races the
+ * Waits for the take-flow to settle into a definitive, *interactable*
+ * state — another question is showing with its answer buttons enabled, or
+ * the result page has loaded — and reports which.
+ *
+ * Several races were found here (all in this test helper, not the app):
+ * checking `page.url()` synchronously right after a click races the
  * in-flight navigation (submitting the last answer triggers an async
- * submit-then-complete-then-navigate chain); waiting for one of these two
- * outcomes to actually render removes that race entirely.
+ * submit-then-complete-then-navigate chain); waiting for a radiogroup to
+ * merely be *visible* isn't enough, because the previous question's
+ * radiogroup is still visible-but-disabled for a moment while its own
+ * submission is in flight, right before it unmounts; and on the *last*
+ * question specifically, the already-answered (checked) option can become
+ * briefly enabled again for a single render in the gap between the
+ * submit-answer and complete-assessment mutations, right before the page
+ * navigates to the result. That last window would satisfy a plain
+ * "some radio is enabled" check even though it's the same, stale,
+ * already-answered question — not a new one. A genuinely fresh question
+ * always starts with every option unchecked, so requiring the enabled
+ * radio to also be *unchecked* rules that stale window out natively.
  */
 async function waitForTakeStep(page: Page): Promise<"question" | "result"> {
   const resultHeading = page.getByRole("heading", { name: "النتيجة الكلية" });
-  const radiogroup = page.getByRole("radiogroup");
-  await Promise.race([
-    resultHeading.waitFor({ state: "visible" }),
-    radiogroup.waitFor({ state: "visible" }),
+  const freshOption = page.getByRole("radio", { checked: false }).first();
+
+  const outcome = await Promise.race([
+    resultHeading.waitFor({ state: "visible", timeout: 30_000 }).then(() => "result" as const),
+    expect(freshOption).toBeEnabled({ timeout: 30_000 }).then(() => "question" as const),
   ]);
-  return (await resultHeading.isVisible()) ? "result" : "question";
+  return outcome;
 }
 
 /** Answers every remaining question on an already-open `/assessments/:id/take` page. */

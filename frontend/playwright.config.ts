@@ -14,11 +14,16 @@ export default defineConfig({
   globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  // A couple of local retries absorbs rare rate-limit-adjacent flakiness
-  // (many parallel specs logging into the same shared account in a burst)
-  // without hiding a real failure — CI keeps its own stricter retry policy.
   retries: process.env.CI ? 2 : 1,
-  workers: process.env.CI ? 1 : 2,
+  // `POST /auth/login` is rate-limited to 10/minute, keyed by remote address
+  // (see backend/app/core/rate_limit.py) — every worker's traffic hits the
+  // *same* 127.0.0.1 bucket. With more than one worker, enough specs' login
+  // calls can land in the same 60s window to trip that real limit, and a
+  // fixed-window reset can take close to a minute to clear — too long to
+  // paper over with an in-test retry/backoff without either fighting the
+  // per-test timeout or masking the actual timing. Serializing here removes
+  // the concurrent bursts at the source instead.
+  workers: 1,
   reporter: "html",
   use: {
     baseURL: "http://127.0.0.1:5173",

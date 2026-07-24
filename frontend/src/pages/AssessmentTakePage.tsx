@@ -28,6 +28,13 @@ export function AssessmentTakePage() {
 
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [selected, setSelected] = useState<ResponseValue | null>(null);
+  // `submitAnswers.isPending` turns false as soon as that mutation settles,
+  // but on the last question `completeAssessment.mutate` is only called
+  // from *inside* its onSuccess callback — leaving a brief gap where neither
+  // mutation reports pending yet, so `isBusy` below would flicker to false
+  // and momentarily re-enable the just-answered (still-checked) options.
+  // This flag stays true across that gap so the scale never re-opens.
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const assessment = assessmentQuery.data;
   const questions = questionsQuery.data;
@@ -76,6 +83,7 @@ export function AssessmentTakePage() {
 
   function handleNext(): void {
     if (!selected) return;
+    setIsSubmitting(true);
     submitAnswers.mutate(
       buildAnswerPayload(currentQuestion!.id, selected),
       {
@@ -83,12 +91,15 @@ export function AssessmentTakePage() {
           if (isLastQuestion) {
             completeAssessment.mutate(undefined, {
               onSuccess: (result) => navigate(`/assessments/${result.id}/result`, { replace: true }),
+              onSettled: () => setIsSubmitting(false),
             });
           } else {
             setCurrentIndex((index) => (index ?? 0) + 1);
             setSelected(null);
+            setIsSubmitting(false);
           }
         },
+        onError: () => setIsSubmitting(false),
       },
     );
   }
@@ -98,7 +109,7 @@ export function AssessmentTakePage() {
     setCurrentIndex((index) => Math.max(0, (index ?? 0) - 1));
   }
 
-  const isBusy = submitAnswers.isPending || completeAssessment.isPending;
+  const isBusy = isSubmitting || submitAnswers.isPending || completeAssessment.isPending;
   const missingCount = getMissingQuestionCount(completeAssessment.error);
 
   return (
