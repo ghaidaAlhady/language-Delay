@@ -101,11 +101,28 @@ async function waitForTakeStep(page: Page): Promise<"question" | "result"> {
 
 /** Answers every remaining question on an already-open `/assessments/:id/take` page. */
 export async function answerRemainingQuestions(page: Page, pattern: AnswerPattern): Promise<void> {
+  const resultHeading = page.getByRole("heading", { name: "النتيجة الكلية" });
   for (let i = 0; i < 30; i++) {
     if ((await waitForTakeStep(page)) === "result") break;
     const label =
       pattern === "all-always" ? "دائمًا" : pattern === "all-never" ? "أبدًا" : i % 2 === 0 ? "دائمًا" : "أبدًا";
-    await page.getByRole("radio", { name: label }).click();
+    // `waitForTakeStep` can still rarely observe a single-render, stale
+    // "enabled+unchecked" reading right as the app navigates away after the
+    // final answer (the app itself now guards against acting on it twice —
+    // see the synchronous in-flight ref in AssessmentTakePage — so this is
+    // no longer a duplicate-submission risk). But by the time this click
+    // would run, the page may have *already* finished navigating, leaving
+    // no such radio to click at all. Race the click against the result
+    // heading actually appearing, so a stale reading here can't stall the
+    // test waiting on an element that will never resolve.
+    const outcome = await Promise.race([
+      page
+        .getByRole("radio", { name: label })
+        .click({ timeout: 30_000 })
+        .then(() => "clicked" as const),
+      resultHeading.waitFor({ state: "visible", timeout: 30_000 }).then(() => "result" as const),
+    ]);
+    if (outcome === "result") break;
     await page.getByRole("button", { name: /التالي|عرض النتائج/ }).click();
   }
   await expect(page).toHaveURL(/\/result$/);

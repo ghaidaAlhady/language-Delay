@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "@/components/Button";
@@ -35,6 +35,14 @@ export function AssessmentTakePage() {
   // and momentarily re-enable the just-answered (still-checked) options.
   // This flag stays true across that gap so the scale never re-opens.
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // `isSubmitting` (state) only disables the *rendered* controls, and that
+  // disabling only takes effect once React commits the next render — it
+  // cannot stop a second `handleNext()` invocation that happens before that
+  // commit lands (e.g. a duplicate click event fired in the same tick).
+  // A ref is read and written synchronously, independent of the render
+  // cycle, so it closes that gap: it's the single source of truth for
+  // "a submission is in flight" and is checked before anything else runs.
+  const submissionInFlightRef = useRef(false);
 
   const assessment = assessmentQuery.data;
   const questions = questionsQuery.data;
@@ -83,6 +91,8 @@ export function AssessmentTakePage() {
 
   function handleNext(): void {
     if (!selected) return;
+    if (submissionInFlightRef.current) return;
+    submissionInFlightRef.current = true;
     setIsSubmitting(true);
     submitAnswers.mutate(
       buildAnswerPayload(currentQuestion!.id, selected),
@@ -91,15 +101,22 @@ export function AssessmentTakePage() {
           if (isLastQuestion) {
             completeAssessment.mutate(undefined, {
               onSuccess: (result) => navigate(`/assessments/${result.id}/result`, { replace: true }),
-              onSettled: () => setIsSubmitting(false),
+              onSettled: () => {
+                submissionInFlightRef.current = false;
+                setIsSubmitting(false);
+              },
             });
           } else {
+            submissionInFlightRef.current = false;
             setCurrentIndex((index) => (index ?? 0) + 1);
             setSelected(null);
             setIsSubmitting(false);
           }
         },
-        onError: () => setIsSubmitting(false),
+        onError: () => {
+          submissionInFlightRef.current = false;
+          setIsSubmitting(false);
+        },
       },
     );
   }
