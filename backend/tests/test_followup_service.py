@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import BadRequestError, NotFoundError
 from app.rag.schemas import Domain
-from app.repositories import user_repository
+from app.repositories import followup_repository, user_repository
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.schemas.assessment import AnswerItem, AnswerSubmissionRequest, ResponseValue
 from app.schemas.child import ChildCreateRequest, Gender
@@ -148,6 +148,66 @@ async def test_followup_detects_improvement_and_regenerates_plan(
     assert active_plan.assessment_id == second_completed.id
 
 
+async def test_followup_requires_active_plan_for_previous_assessment(
+    assessment_service: AssessmentService,
+    followup_service: FollowupService,
+    child_service: ChildService,
+    db_session: AsyncSession,
+) -> None:
+    user_id = await _make_user(db_session)
+    child = await child_service.create(
+        user_id=user_id,
+        payload=ChildCreateRequest(
+            name="Layla",
+            date_of_birth=date(date.today().year - 2, date.today().month, 1),
+            gender=Gender.FEMALE,
+            home_language="ar",
+        ),
+    )
+    first = await assessment_service.start(child)
+    await _complete(assessment_service, first, ResponseValue.NEVER)
+    second = await assessment_service.start(child)
+    second_completed = await _complete(
+        assessment_service, second, ResponseValue.ALWAYS
+    )
+
+    with pytest.raises(BadRequestError, match="active weekly plan"):
+        await followup_service.complete_followup(second_completed)
+
+
+async def test_followup_rejects_plan_for_current_instead_of_previous_assessment(
+    assessment_service: AssessmentService,
+    followup_service: FollowupService,
+    weekly_plan_service: WeeklyPlanService,
+    child_service: ChildService,
+    db_session: AsyncSession,
+) -> None:
+    user_id = await _make_user(db_session)
+    child = await child_service.create(
+        user_id=user_id,
+        payload=ChildCreateRequest(
+            name="Layla",
+            date_of_birth=date(date.today().year - 2, date.today().month, 1),
+            gender=Gender.FEMALE,
+            home_language="ar",
+        ),
+    )
+    first = await assessment_service.start(child)
+    first_completed = await _complete(
+        assessment_service, first, ResponseValue.NEVER
+    )
+    await weekly_plan_service.generate(first_completed)
+
+    second = await assessment_service.start(child)
+    second_completed = await _complete(
+        assessment_service, second, ResponseValue.ALWAYS
+    )
+    await weekly_plan_service.generate(second_completed)
+
+    with pytest.raises(BadRequestError, match="previous assessment"):
+        await followup_service.complete_followup(second_completed)
+
+
 async def test_followup_is_idempotent(
     assessment_service: AssessmentService,
     followup_service: FollowupService,
@@ -173,8 +233,18 @@ async def test_followup_is_idempotent(
     second_completed = await _complete(assessment_service, second, ResponseValue.ALWAYS)
 
     first_followup = await followup_service.complete_followup(second_completed)
+    first_replacement_plan = await weekly_plan_service.get_active_owned(
+        child_id=child.id, user_id=user_id
+    )
     second_followup = await followup_service.complete_followup(second_completed)
+    second_replacement_plan = await weekly_plan_service.get_active_owned(
+        child_id=child.id, user_id=user_id
+    )
+    stored_followups = await followup_repository.list_for_child(db_session, child.id)
+
     assert first_followup.id == second_followup.id
+    assert first_replacement_plan.id == second_replacement_plan.id
+    assert len(stored_followups) == 1
 
 
 async def test_get_owned_hides_other_users_followup(

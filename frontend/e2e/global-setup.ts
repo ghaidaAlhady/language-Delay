@@ -1,25 +1,32 @@
-import { chromium, type FullConfig } from "@playwright/test";
+import { request } from "@playwright/test";
 
-import { loginExistingParent, registerNewParent, SHARED_PARENT_EMAIL } from "./helpers";
+import { SHARED_PARENT_EMAIL } from "./helpers";
+
+const E2E_BACKEND_URL = "http://127.0.0.1:8001";
 
 /**
  * Ensures the one shared parent account (see helpers.ts::SHARED_PARENT_EMAIL)
- * exists, registering it if this is the first run against this dev
- * database. Re-running the suite against a dev database where the account
- * already exists is expected (registration then 409s) — that's fine, we
- * just confirm login still works.
+ * exists in the isolated E2E database. It uses a real HTTP request instead
+ * of launching a browser only for setup: individual tests still exercise
+ * login through the real UI, while setup avoids an unnecessary browser
+ * process and a second rate-limited login.
  */
-export default async function globalSetup(config: FullConfig): Promise<void> {
-  const baseURL = config.projects[0]?.use.baseURL ?? "http://127.0.0.1:5173";
-  const browser = await chromium.launch();
-  const context = await browser.newContext({ baseURL });
-  const page = await context.newPage();
-
+export default async function globalSetup(): Promise<void> {
+  const api = await request.newContext({ baseURL: E2E_BACKEND_URL });
   try {
-    await registerNewParent(page, { email: SHARED_PARENT_EMAIL });
-  } catch {
-    await loginExistingParent(page, SHARED_PARENT_EMAIL);
+    const response = await api.post("/api/v1/auth/register", {
+      data: {
+        email: SHARED_PARENT_EMAIL,
+        password: "supersecret1",
+        display_name: "ولي أمر",
+      },
+    });
+    if (response.status() !== 201 && response.status() !== 409) {
+      throw new Error(
+        `Unable to seed the shared E2E parent: ${response.status()} ${await response.text()}`,
+      );
+    }
+  } finally {
+    await api.dispose();
   }
-
-  await browser.close();
 }

@@ -81,6 +81,107 @@ def test_followup_flow_and_plan_regeneration(client: TestClient) -> None:
     assert current_plan["id"] != first_plan["id"]
     assert current_plan["assessment_id"] == second_assessment_id
 
+    duplicate = client.post(
+        f"/api/v1/assessments/{second_assessment_id}/followup", headers=headers
+    )
+    assert duplicate.status_code == 201
+    assert duplicate.json()["id"] == body["id"]
+
+    repeated_listing = client.get(
+        f"/api/v1/children/{child_id}/followups", headers=headers
+    )
+    assert len(repeated_listing.json()) == 1
+    unchanged_plan = client.get(
+        f"/api/v1/children/{child_id}/weekly-plan", headers=headers
+    ).json()
+    assert unchanged_plan["id"] == current_plan["id"]
+
+
+def test_followup_requires_authentication(client: TestClient) -> None:
+    assert client.post("/api/v1/assessments/unknown/followup").status_code == 401
+    assert client.get("/api/v1/followups/unknown").status_code == 401
+    assert client.get("/api/v1/children/unknown/followups").status_code == 401
+
+
+def test_followup_requires_completed_assessment(client: TestClient) -> None:
+    headers = _auth_headers(client, "parent@example.com")
+    child_id = _create_child(client, headers)
+    assessment_id = client.post(
+        f"/api/v1/children/{child_id}/assessments", headers=headers
+    ).json()["id"]
+
+    response = client.post(
+        f"/api/v1/assessments/{assessment_id}/followup", headers=headers
+    )
+    assert response.status_code == 400
+
+
+def test_followup_requires_active_plan_for_previous_assessment(
+    client: TestClient,
+) -> None:
+    headers = _auth_headers(client, "parent@example.com")
+    child_id = _create_child(client, headers)
+    _complete_assessment(client, headers, child_id, "never")
+    second_assessment_id = _complete_assessment(
+        client, headers, child_id, "always"
+    )
+
+    response = client.post(
+        f"/api/v1/assessments/{second_assessment_id}/followup", headers=headers
+    )
+    assert response.status_code == 400
+
+
+def test_followup_does_not_link_active_plan_from_another_child(
+    client: TestClient,
+) -> None:
+    headers = _auth_headers(client, "parent@example.com")
+    child_with_plan = _create_child(client, headers)
+    followup_child = _create_child(client, headers)
+
+    other_assessment_id = _complete_assessment(
+        client, headers, child_with_plan, "never"
+    )
+    client.post(
+        f"/api/v1/assessments/{other_assessment_id}/weekly-plan",
+        headers=headers,
+    )
+
+    _complete_assessment(client, headers, followup_child, "never")
+    followup_assessment_id = _complete_assessment(
+        client, headers, followup_child, "always"
+    )
+
+    response = client.post(
+        f"/api/v1/assessments/{followup_assessment_id}/followup",
+        headers=headers,
+    )
+    assert response.status_code == 400
+
+
+def test_followup_rejects_active_plan_for_current_assessment(
+    client: TestClient,
+) -> None:
+    headers = _auth_headers(client, "parent@example.com")
+    child_id = _create_child(client, headers)
+    first_assessment_id = _complete_assessment(
+        client, headers, child_id, "never"
+    )
+    client.post(
+        f"/api/v1/assessments/{first_assessment_id}/weekly-plan", headers=headers
+    )
+    second_assessment_id = _complete_assessment(
+        client, headers, child_id, "always"
+    )
+    client.post(
+        f"/api/v1/assessments/{second_assessment_id}/weekly-plan", headers=headers
+    )
+
+    response = client.post(
+        f"/api/v1/assessments/{second_assessment_id}/followup", headers=headers
+    )
+    assert response.status_code == 400
+
 
 def test_followup_ownership_isolation(client: TestClient) -> None:
     headers_a = _auth_headers(client, "a@example.com")

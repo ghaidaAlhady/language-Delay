@@ -4,6 +4,11 @@ import { defineConfig, devices } from "@playwright/test";
 // different port than the developer's normal dev backend (8000), and reads
 // its own disposable SQLite file — never `backend/language_delay.db`.
 const E2E_BACKEND_URL = "http://127.0.0.1:8001";
+const E2E_FRONTEND_URL = "http://127.0.0.1:4173";
+const E2E_BACKEND_PYTHON =
+  process.platform === "win32"
+    ? "..\\backend\\.venv\\Scripts\\python.exe"
+    : "../backend/.venv/bin/python";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -26,7 +31,7 @@ export default defineConfig({
   workers: 1,
   reporter: "html",
   use: {
-    baseURL: "http://127.0.0.1:5173",
+    baseURL: E2E_FRONTEND_URL,
     trace: "on-first-retry",
   },
   projects: [
@@ -40,19 +45,25 @@ export default defineConfig({
   // guarantee, not an oversight: reusing a stray dev-pointed frontend would
   // silently point it at the dev backend/database instead of the isolated
   // E2E one. The tradeoff is a few extra seconds of startup per run.
-  webServer: [
-    {
-      command: "bash ../backend/run_e2e_server.sh",
-      url: `${E2E_BACKEND_URL}/health`,
-      reuseExistingServer: false,
-      timeout: 60_000,
-    },
-    {
-      command: "npm run dev",
-      url: "http://127.0.0.1:5173",
-      reuseExistingServer: false,
-      timeout: 30_000,
-      env: { VITE_API_BASE_URL: E2E_BACKEND_URL },
-    },
-  ],
+  webServer: process.env.PW_EXTERNAL_SERVERS
+    ? undefined
+    : [
+        {
+          command: `${E2E_BACKEND_PYTHON} ../backend/run_e2e_server.py`,
+          url: `${E2E_BACKEND_URL}/health`,
+          reuseExistingServer: false,
+          timeout: 60_000,
+          env: { CORS_ORIGINS: JSON.stringify([E2E_FRONTEND_URL]) },
+        },
+        {
+          // Launch Vite directly. On Windows, Playwright's web-server wrapper can
+          // leave `npm run dev` waiting without ever spawning Vite, so the URL
+          // poll never resolves even though the same npm script works manually.
+          command: "node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4173 --strictPort",
+          url: E2E_FRONTEND_URL,
+          reuseExistingServer: false,
+          timeout: 30_000,
+          env: { VITE_API_BASE_URL: E2E_BACKEND_URL },
+        },
+      ],
 });

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "@/components/Button";
@@ -22,6 +22,7 @@ export function AssessmentResultPage() {
   const generateReport = useGenerateReport();
   const generateWeeklyPlan = useGenerateWeeklyPlan(childId ?? "");
   const createFollowup = useCreateFollowup(childId ?? "");
+  const followupSubmissionInFlightRef = useRef(false);
 
   useEffect(() => {
     if (assessmentQuery.data && assessmentQuery.data.status !== "completed") {
@@ -55,8 +56,13 @@ export function AssessmentResultPage() {
   }
 
   function handleCompareWithPrevious(): void {
+    if (followupSubmissionInFlightRef.current) return;
+    followupSubmissionInFlightRef.current = true;
     createFollowup.mutate(assessment!.id, {
       onSuccess: (followup) => navigate(`/followups/${followup.id}`),
+      onSettled: () => {
+        followupSubmissionInFlightRef.current = false;
+      },
     });
   }
 
@@ -124,7 +130,10 @@ export function AssessmentResultPage() {
         <h2 className="mb-3 font-semibold text-primary-900">مستوى الدعم حسب المجال</h2>
         <div className="flex flex-col gap-4">
           {assessment.domain_results.map((domain) => (
-            <div key={domain.domain} className="border-b border-primary-50 pb-3 last:border-0 last:pb-0">
+            <div
+              key={domain.domain}
+              className="border-b border-primary-50 pb-3 last:border-0 last:pb-0"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-medium text-primary-900">{domain.domain}</p>
                 <SeverityBadge severity={domain.severity} />
@@ -141,7 +150,9 @@ export function AssessmentResultPage() {
 
       {(generateReport.isError || generateWeeklyPlan.isError || createFollowup.isError) && (
         <p role="alert" className="text-center text-sm text-danger-600">
-          {getArabicErrorMessage(generateReport.error ?? generateWeeklyPlan.error ?? createFollowup.error)}
+          {getArabicErrorMessage(
+            generateReport.error ?? generateWeeklyPlan.error ?? createFollowup.error,
+          )}
         </p>
       )}
 
@@ -149,12 +160,20 @@ export function AssessmentResultPage() {
         <Button isLoading={generateReport.isPending} onClick={handleViewReport}>
           عرض التقرير
         </Button>
-        <Button variant="outline" isLoading={generateWeeklyPlan.isPending} onClick={handleGeneratePlan}>
+        <Button
+          variant="outline"
+          isLoading={generateWeeklyPlan.isPending}
+          onClick={handleGeneratePlan}
+        >
           إنشاء الخطة الأسبوعية
         </Button>
         {hasPreviousCompletedAssessment && (
-          <Button variant="secondary" isLoading={createFollowup.isPending} onClick={handleCompareWithPrevious}>
-            مقارنة بالتقييم السابق
+          <Button
+            variant="secondary"
+            isLoading={createFollowup.isPending}
+            onClick={handleCompareWithPrevious}
+          >
+            إكمال المتابعة الأسبوعية
           </Button>
         )}
       </div>

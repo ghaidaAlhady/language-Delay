@@ -14,13 +14,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-E2E_DB_FILE="language_delay_e2e.db"
-export DATABASE_URL="sqlite+aiosqlite:///./${E2E_DB_FILE}"
-
-rm -f "$E2E_DB_FILE"
-
 VENV_BIN=".venv/Scripts"
 [ -d "$VENV_BIN" ] || VENV_BIN=".venv/bin"
 
-"$VENV_BIN/python" -m alembic upgrade head
-exec "$VENV_BIN/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+exec "$VENV_BIN/python" run_e2e_server.py

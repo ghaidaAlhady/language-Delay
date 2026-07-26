@@ -2,6 +2,7 @@ import type {
   AssessmentQuestionResponse,
   AssessmentResponse,
   ChildResponse,
+  FollowupResponse,
   ReportResponse,
   UserResponse,
   WeeklyPlanResponse,
@@ -105,7 +106,12 @@ export const fixtureReport: ReportResponse = {
   referral_recommended: false,
   confidence_score: 1,
   domain_summaries: [
-    { domain: "اللغة الاستقبالية", score_percent: 100, severity: "طبيعي", recommendation: "استمر." },
+    {
+      domain: "اللغة الاستقبالية",
+      score_percent: 100,
+      severity: "طبيعي",
+      recommendation: "استمر.",
+    },
   ],
   strengths: ["الاستجابة للاسم"],
   support_needs: [],
@@ -113,7 +119,8 @@ export const fixtureReport: ReportResponse = {
   weekly_goal: "التركيز على اللغة الاستقبالية.",
   recommended_activity_ids: ["A001", "A002"],
   next_reassessment: "3 أشهر",
-  disclaimer: "هذا التطبيق أداة داعمة لولي الأمر ولا يغني عن التقييم أو العلاج من قبل أخصائي تخاطب مؤهل.",
+  disclaimer:
+    "هذا التطبيق أداة داعمة لولي الأمر ولا يغني عن التقييم أو العلاج من قبل أخصائي تخاطب مؤهل.",
 };
 
 export const fixtureWeeklyPlan: WeeklyPlanResponse = {
@@ -177,4 +184,19 @@ export const fixtureWeeklyPlan: WeeklyPlanResponse = {
       },
     },
   ],
+};
+
+export const fixtureFollowup: FollowupResponse = {
+  id: "followup-1",
+  child_id: "child-1",
+  previous_assessment_id: "assessment-1",
+  current_assessment_id: "assessment-2",
+  previous_score_percent: 25,
+  current_score_percent: 100,
+  improvement_percent: 75,
+  improved_domains: ["اللغة الاستقبالية"],
+  support_needed_domains: [],
+  comment: "أظهر الطفل تحسنًا في مهارات اللغة.",
+  next_goal: "الاستمرار في دعم مهارات اللغة الاستقبالية.",
+  created_at: "2026-01-08T00:00:00Z",
 };

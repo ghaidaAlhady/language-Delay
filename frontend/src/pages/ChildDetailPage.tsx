@@ -26,7 +26,10 @@ export function ChildDetailPage() {
   if (childQuery.isPending) return <SkeletonCard />;
   if (childQuery.isError) {
     return (
-      <ErrorState message={getArabicErrorMessage(childQuery.error)} onRetry={() => void childQuery.refetch()} />
+      <ErrorState
+        message={getArabicErrorMessage(childQuery.error)}
+        onRetry={() => void childQuery.refetch()}
+      />
     );
   }
 
@@ -76,8 +79,8 @@ export function ChildDetailPage() {
       {!child.is_assessment_age_eligible && (
         <Card className="border-2 border-warning-500 bg-warning-50">
           <p className="text-sm text-primary-900">
-            عمر الطفل الحالي خارج النطاق المدعوم للتقييم (من سنتين إلى خمس سنوات)، لذلك لا يمكن
-            بدء تقييم جديد الآن.
+            عمر الطفل الحالي خارج النطاق المدعوم للتقييم (من سنتين إلى خمس سنوات)، لذلك لا يمكن بدء
+            تقييم جديد الآن.
           </p>
         </Card>
       )}
@@ -97,11 +100,12 @@ export function ChildDetailPage() {
         <Link to={`/children/${child.id}/assessments`}>
           <Button variant="outline">سجل التقييمات</Button>
         </Link>
-        {child.is_assessment_age_eligible && (assessmentsQuery.data ?? []).some((a) => a.status === "completed") && (
-          <Link to={`/children/${child.id}/reassessment`}>
-            <Button variant="outline">إعادة التقييم</Button>
-          </Link>
-        )}
+        {child.is_assessment_age_eligible &&
+          (assessmentsQuery.data ?? []).some((a) => a.status === "completed") && (
+            <Link to={`/children/${child.id}/reassessment`}>
+              <Button variant="outline">المتابعة الأسبوعية</Button>
+            </Link>
+          )}
       </div>
 
       <Card>
@@ -115,7 +119,8 @@ export function ChildDetailPage() {
             <p>التاريخ: {formatArabicDate(latestAssessment.started_at)}</p>
             <p>
               الحالة: {latestAssessment.status === "completed" ? "مكتمل" : "قيد التنفيذ"}
-              {latestAssessment.overall_severity && ` — النتيجة: ${latestAssessment.overall_severity}`}
+              {latestAssessment.overall_severity &&
+                ` — النتيجة: ${latestAssessment.overall_severity}`}
             </p>
           </div>
         )}

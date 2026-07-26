@@ -73,6 +73,197 @@ None known as of this update. E2E suite execution is the next actual verificatio
 
 ## Current Agent Handoff
 
+### Authoritative Checkpoint 3 completion update (2026-07-26)
+
+- **Repository path:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
+- **Current branch:** `feature/web-frontend` (confirmed; no branch change was made).
+- **Working-tree status:** Not clean by design. Checkpoint 3 has modified tracked files and
+  two new untracked implementation/test files. The pre-existing untracked
+  `.claude/settings.local.json` and `AGENTS.md` were preserved. The requested
+  `agent_test.txt` exists with exactly `Agent is working` and remains untracked.
+- **Last commit hash:** `53c6343ce0688180df7ad92524810fbed98fed7d`
+  (`docs: add current agent handoff for milestone 1`). The last application-code commit
+  remains `bde709beaaae375800641e2a38abdb20c2569f23`.
+- **Current milestone:** Milestone 1 â€” Project Stabilization.
+- **Current checkpoint:** Checkpoint 3 â€” Weekly Follow-Up E2E Verification,
+  **completed locally and not committed**.
+- **Last completed checkpoint:** Checkpoint 3. Work stopped before Checkpoint 4.
+
+#### Original weekly follow-up behavior
+
+- Case 10 did create a genuine backend `followups` row and regenerate the weekly plan; it
+  was not merely a second assessment.
+- However, the test entered the child by direct URL and only checked visible headings. It
+  did not prove normal navigation, child/assessment/plan identity, persisted list state,
+  duplicate-submit behavior, replacement-plan identity, or reload persistence.
+- The follow-up start page did not show the child or active-plan context and did not block
+  a follow-up with no active plan or with a plan tied to the wrong assessment.
+- The backend accepted follow-up creation without an active plan and could use an active
+  plan that did not belong to the previous assessment being followed up.
+- The final follow-up action relied only on React mutation pending state, leaving a
+  same-render rapid-double-click window.
+
+#### Confirmed defects and exact fixes
+
+1. `FollowupService.complete_followup()` now requires an active weekly plan for the same
+   child and verifies that the plan belongs to the previous completed assessment. Existing
+   follow-ups are returned idempotently before these precondition checks.
+2. `ReassessmentPage` now loads and displays the child and active-plan context, including
+   plan date and adherence. It blocks with actionable Arabic UI when no plan exists or the
+   active plan is not tied to the latest completed assessment.
+3. Child/result UI wording now describes a weekly follow-up instead of a generic
+   reassessment/comparison.
+4. `AssessmentResultPage` now uses a synchronous in-flight ref around follow-up creation,
+   closing the same-tick duplicate-click race while preserving the mutation loading state.
+5. Case 10 now follows normal UI navigation and verifies real response IDs, one POST under
+   rapid double click, one persisted follow-up row, progress detail after reload, a new
+   active plan tied to the second assessment, and plan persistence after reload.
+6. Backend service/API tests now cover missing plans, current-assessment plans, cross-child
+   plan isolation, unauthenticated access, cross-parent ownership, and idempotent follow-up
+   plus plan replacement.
+7. E2E setup now seeds the shared parent with a real API request instead of launching an
+   extra browser and login. The isolated backend migration/startup is kept in one Python
+   launcher; Vite starts directly on E2E-only port 4173 with explicit CORS. An opt-in
+   `PW_EXTERNAL_SERVERS` mode lets the Windows test runner own and stop exact processes.
+   Production authentication and rate limiting were not weakened.
+
+#### Exact verification results
+
+- Focused desktop Case 10, clean isolated database each time, retries disabled:
+  **5/5 successful runs** â€” `1 passed` in 59.3s, 1.0m, 1.2m, 57.6s, and 41.5s.
+  Command executed through the bounded external-server wrapper:
+  `node .\node_modules\@playwright\test\cli.js test
+  e2e/case-10-followup-reassessment.spec.ts --project=desktop-chromium
+  --retries=0 --reporter=line` with `PW_EXTERNAL_SERVERS=1`.
+- Authentication protection:
+  `tests/test_followups_api.py::test_followup_requires_authentication` â€”
+  **1 passed**. Unauthenticated follow-up submit, detail, and list all return 401.
+- Ownership isolation: focused follow-up/weekly-plan API and service tests â€”
+  **4 passed**. Parent B cannot view/submit Parent A's follow-up, view Parent A's plan,
+  mark its activity, request an alternative, or generate a plan from Parent A's assessment.
+- Validation: focused follow-up and assessment API tests â€” **7 passed**; focused
+  `ReassessmentPage` tests â€” **3 passed**. Coverage includes incomplete assessment,
+  missing answers, invalid answer value (422), no previous assessment, no prior active
+  plan, plan tied to the current rather than previous assessment, and another child's plan.
+- Duplicate submission: focused backend service/API tests â€” **2 passed**; focused
+  `AssessmentResultPage` tests â€” **3 passed**. A repeated backend request returns the
+  existing follow-up, the child retains one row, the replacement plan ID is unchanged,
+  and a rapid UI double click sends one POST.
+- Assessment-to-follow-up subset: assessment/scoring/follow-up/weekly-plan backend files â€”
+  **55 passed**; relevant frontend page files â€” **17 passed**.
+- Complete backend suite:
+  `.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider
+  --basetemp=<workspace-temp>` â€” **168 passed, 7 warnings in 66.11s**.
+- Complete frontend suite:
+  `npm.cmd run test -- --reporter=dot` â€” **106 passed in 21 files**.
+  The pre-existing React `act(...)` and unmatched test-route warnings remain non-failing.
+- Frontend typecheck: `npm.cmd run typecheck` â€” **passed**.
+- Frontend lint: `npm.cmd run lint` â€” **passed** with the pre-existing
+  `react(only-export-components)` warning in `src/tests/test-utils.tsx:58`.
+- Focused backend Ruff check for all changed Python files â€” **passed**.
+- Prettier check for all changed frontend files â€” **passed**.
+- Complete Desktop/Chromium project, run once with retries disabled:
+  **26 passed / 1 failed out of 27 in 4.8m**. Case 10 passed. The sole failure was the
+  pre-existing offline-resilience case because no Arabic offline alert appeared within
+  20 seconds. No auth rate-limit case failed in this run.
+
+#### Persistence, plan, scoring, referral, and knowledge-base conclusions
+
+- The real follow-up response linked the correct child, previous assessment, and current
+  assessment; exactly one row was returned by the authenticated list API.
+- Follow-up detail and the replacement weekly plan remained available after full reloads.
+- The replacement plan had a new ID, was tied to the second assessment, and remained the
+  active plan after reload.
+- Assessment scoring and specialist-referral implementation files were not changed, and the
+  assessment/scoring subset plus complete backend suite passed.
+- No file under `knowledge_base/` was changed. Weekly-plan tests continue to verify that
+  generated activity IDs resolve from the approved KB02 activity source.
+
+#### Known failures and remaining risks
+
+- `frontend/e2e/resilience.spec.ts` still fails its pre-existing offline-alert test. This
+  was explicitly out of the main Checkpoint 3 scope and did not block weekly follow-up.
+- Real login/register rate limits can still make heavy repeated E2E loads flaky, although
+  neither the five focused successes nor the one complete desktop run failed on auth.
+- Playwright-owned web-server startup/teardown was unreliable in this Windows tool
+  environment during diagnosis, and repeated health polling temporarily accumulated
+  `TIME_WAIT` sockets on port 5173. The successful verification used E2E port 4173 and
+  exact externally owned processes through `PW_EXTERNAL_SERVERS=1`.
+- Milestone 1's repository-level acceptance criterion of 27/27 E2E cases in two consecutive
+  clean runs is still unmet because the separate offline case remains failing.
+- The ignored disposable `backend/language_delay_e2e.db` was regenerated by E2E tests.
+  The pre-existing ignored `frontend/playwright-report/` remains. Neither may be staged.
+
+#### Modified and untracked files
+
+Checkpoint 3 modified tracked files:
+
+- `backend/app/services/followup_service.py`
+- `backend/run_e2e_server.sh`
+- `backend/tests/test_followup_service.py`
+- `backend/tests/test_followups_api.py`
+- `frontend/e2e/case-10-followup-reassessment.spec.ts`
+- `frontend/e2e/global-setup.ts`
+- `frontend/playwright.config.ts`
+- `frontend/src/pages/AssessmentResultPage.test.tsx`
+- `frontend/src/pages/AssessmentResultPage.tsx`
+- `frontend/src/pages/ChildDetailPage.tsx`
+- `frontend/src/pages/ReassessmentPage.tsx`
+- `frontend/src/tests/fixtures.ts`
+- `PROGRESS.md`
+
+Checkpoint 3 new untracked files:
+
+- `backend/run_e2e_server.py`
+- `frontend/src/pages/ReassessmentPage.test.tsx`
+
+Pre-existing/requested untracked files preserved and excluded from Checkpoint 3:
+
+- `.claude/settings.local.json`
+- `AGENTS.md`
+- `agent_test.txt`
+
+#### Work still remaining and exact next action
+
+Checkpoint 3 itself requires no further weekly-follow-up work. The exact next action is for
+the user to review this diff and test record. If accepted, the user may stage only the
+Checkpoint 3 paths listed above and create the suggested commit. Do not begin Checkpoint 4
+until the user explicitly approves its scope. The recommended next stabilization task is a
+separate focused diagnosis of the offline-resilience alert and standard Windows Playwright
+server lifecycle, followed by the milestone-wide 27/27 twice acceptance run.
+
+It is **not yet safe to begin Checkpoint 4 automatically**: explicit approval is required,
+and Milestone 1's full 27/27-twice gate remains open. It is technically safe to request that
+approval because the Checkpoint 3 weekly-follow-up acceptance criteria are met.
+
+#### Safety warnings and staging boundary
+
+- Never commit, push, merge, reset, clean, revert, deploy, or change branches automatically.
+- Safe to stage only after explicit user review: the 15 Checkpoint 3 modified/new
+  application, test, runner, and documentation paths listed above.
+- Do not stage `.claude/settings.local.json`, `AGENTS.md`, `agent_test.txt`,
+  `backend/language_delay_e2e.db`, `frontend/playwright-report/`, `.env` files, databases,
+  secrets, `node_modules`, build output, logs, screenshots, traces, videos, or temporary
+  artifacts.
+- Preserve assessment scoring, specialist-referral rules, and knowledge-base content.
+- Suggested Conventional Commit message:
+  `fix(followup): verify weekly follow-up persistence and plan linkage`
+
+#### Suggested continuation prompt for Claude Code or Codex
+
+> Read `CLAUDE.md`, `AGENTS.md`, `PROGRESS.md`, `PROJECT_STATUS_AND_MILESTONES.md`,
+> `PROJECT_SPEC.md`, and `CLAUDE_CODE_PROMPT.md`. Confirm the repository root, branch
+> `feature/web-frontend`, `git status --short`, and recent log without changing Git state.
+> Review the authoritative Checkpoint 3 completion update and preserve every existing
+> modified/untracked file. Checkpoint 3 is complete locally; do not redo it or start
+> Checkpoint 4 without explicit user approval. If Checkpoint 4 is approved as the next
+> stabilization task, focus separately on the known offline-resilience alert and standard
+> Windows Playwright server lifecycle. Do not weaken auth/rate limiting, scoring,
+> specialist-referral rules, or knowledge-base content. Run focused tests after every
+> change, update `PROGRESS.md`, report all files, and do not commit/push/merge/deploy.
+
+### Superseded pre-Checkpoint 3 snapshot (retained for history)
+
 - **Repository path:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
 - **Current branch:** `feature/web-frontend` (confirmed; no branch change was made)
 - **Working-tree status before this handoff update:** Not clean. Pre-existing untracked

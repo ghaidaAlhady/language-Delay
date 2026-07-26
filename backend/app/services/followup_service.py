@@ -12,7 +12,12 @@ from app.core.errors import BadRequestError, NotFoundError
 from app.models.assessment import Assessment
 from app.models.followup import Followup
 from app.rag.schemas import Domain, ReportStatus, Severity
-from app.repositories import assessment_repository, child_repository, followup_repository
+from app.repositories import (
+    assessment_repository,
+    child_repository,
+    followup_repository,
+    weekly_plan_repository,
+)
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.schemas.assessment import AssessmentStatus
 from app.schemas.followup import FollowupResponse
@@ -51,6 +56,19 @@ class FollowupService:
                 "No previous completed assessment exists for this child to compare "
                 "against — this must be their first assessment, which gets a "
                 "regular report instead of a follow-up."
+            )
+
+        active_plan = await weekly_plan_repository.get_active_for_child(
+            self.session, current_assessment.child_id
+        )
+        if active_plan is None:
+            raise BadRequestError(
+                "An active weekly plan is required before completing a follow-up."
+            )
+        if active_plan.assessment_id != previous_assessment.id:
+            raise BadRequestError(
+                "The active weekly plan must belong to the previous assessment "
+                "being followed up."
             )
 
         previous_rows = await assessment_repository.get_domain_results(
