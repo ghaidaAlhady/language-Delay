@@ -71,6 +71,7 @@ def test_generate_and_get_report(client: TestClient) -> None:
     body = generate.json()
     assert body["report_number"].startswith("REP-")
     assert body["disclaimer"]
+    assert body["next_reassessment"] == "إعادة التقييم بعد أسبوع وتحديث الخطة"
 
     detail = client.get(f"/api/v1/reports/{body['id']}", headers=headers)
     assert detail.status_code == 200

@@ -21,6 +21,7 @@ from app.rag.schemas import (
     ReportStatus,
     ReportTemplateField,
     Severity,
+    WeeklyFollowupQuestionRecord,
     WeeklyPlanTemplateDay,
 )
 
@@ -213,12 +214,41 @@ def normalize_kb05(
     )
 
 
+def normalize_kb06(
+    rows: list[dict[str, Any]], source_file: str
+) -> list[WeeklyFollowupQuestionRecord]:
+    source_sheet = "WeeklyFollowupQuestions"
+    return _build_records(
+        WeeklyFollowupQuestionRecord,
+        source_file,
+        source_sheet,
+        rows,
+        lambda row: {
+            "id": row["question_id"],
+            "age_min": int(row["age_min"]),
+            "age_max": int(row["age_max"]),
+            "domain": row.get("domain"),
+            "weekly_goal_key": row["weekly_goal_key"],
+            "skill_key": row["skill_key"],
+            "applicable_activity_ids": list(row["applicable_activity_ids"]),
+            "question_text_ar": row["question_text_ar"],
+            "response_type": row["response_type"],
+            "required": bool(row["required"]),
+            "progress_weight": float(row["progress_weight"]),
+            "active": bool(row["active"]),
+            "is_generic_fallback": bool(row.get("is_generic_fallback", False)),
+            "reference_note": row["reference_note"],
+        },
+    )
+
+
 __all__ = [
     "normalize_kb01",
     "normalize_kb02",
     "normalize_kb03",
     "normalize_kb04",
     "normalize_kb05",
+    "normalize_kb06",
     "Domain",
     "Importance",
     "Severity",

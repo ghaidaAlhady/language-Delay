@@ -1,4 +1,4 @@
-"""Typed, validated representations of records loaded from KB01-KB05.
+"""Typed, validated representations of records loaded from KB01-KB06.
 
 Every record keeps a reference back to its knowledge-base source (file,
 sheet, and natural ID) so that any recommendation, score, or report text
@@ -143,6 +143,25 @@ class QuestionRecord(KBRecordBase):
     notes: str | None = None
 
 
+class WeeklyFollowupQuestionRecord(KBRecordBase):
+    """KB06: a deterministic weekly-plan progress question template."""
+
+    id: str
+    age_min: int
+    age_max: int
+    domain: Domain | None
+    weekly_goal_key: str
+    skill_key: str
+    applicable_activity_ids: list[str]
+    question_text_ar: str
+    response_type: str
+    required: bool
+    progress_weight: float
+    active: bool
+    is_generic_fallback: bool = False
+    reference_note: str
+
+
 class ReportTemplateField(KBRecordBase):
     """KB04 key/value template sheets (initial, progress, referral reports)."""
 
@@ -169,7 +188,7 @@ class NarrativeTemplate(KBRecordBase):
 
 
 class KnowledgeBase(BaseModel):
-    """The fully loaded, validated, in-memory knowledge base (KB01-KB05)."""
+    """The fully loaded, validated, in-memory knowledge base (KB01-KB06)."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -178,6 +197,7 @@ class KnowledgeBase(BaseModel):
     activities: list[ActivityRecord]
     decision_rules: list[DecisionRuleRecord]
     questions: list[QuestionRecord]
+    weekly_followup_questions: list[WeeklyFollowupQuestionRecord]
     initial_report_fields: list[ReportTemplateField]
     progress_report_fields: list[ReportTemplateField]
     referral_report_fields: list[ReportTemplateField]

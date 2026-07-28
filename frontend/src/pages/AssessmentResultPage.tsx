@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "@/components/Button";
@@ -6,8 +6,7 @@ import { Card } from "@/components/Card";
 import { ErrorState } from "@/components/ErrorState";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { SkeletonCard } from "@/components/Skeleton";
-import { useAssessment, useAssessmentsForChild } from "@/features/assessment/useAssessments";
-import { useCreateFollowup } from "@/features/followup/useFollowups";
+import { useAssessment } from "@/features/assessment/useAssessments";
 import { useGenerateReport } from "@/features/reports/useReports";
 import { useGenerateWeeklyPlan } from "@/features/weeklyPlan/useWeeklyPlan";
 import { getArabicErrorMessage } from "@/utils/errorMessages";
@@ -18,11 +17,8 @@ export function AssessmentResultPage() {
   const navigate = useNavigate();
   const assessmentQuery = useAssessment(assessmentId);
   const childId = assessmentQuery.data?.child_id;
-  const siblingAssessmentsQuery = useAssessmentsForChild(childId);
   const generateReport = useGenerateReport();
   const generateWeeklyPlan = useGenerateWeeklyPlan(childId ?? "");
-  const createFollowup = useCreateFollowup(childId ?? "");
-  const followupSubmissionInFlightRef = useRef(false);
 
   useEffect(() => {
     if (assessmentQuery.data && assessmentQuery.data.status !== "completed") {
@@ -55,20 +51,6 @@ export function AssessmentResultPage() {
     });
   }
 
-  function handleCompareWithPrevious(): void {
-    if (followupSubmissionInFlightRef.current) return;
-    followupSubmissionInFlightRef.current = true;
-    createFollowup.mutate(assessment!.id, {
-      onSuccess: (followup) => navigate(`/followups/${followup.id}`),
-      onSettled: () => {
-        followupSubmissionInFlightRef.current = false;
-      },
-    });
-  }
-
-  const hasPreviousCompletedAssessment = (siblingAssessmentsQuery.data ?? []).some(
-    (a) => a.status === "completed" && a.id !== assessment.id,
-  );
   const referralNeeded = assessment.overall_referral !== "لا";
 
   return (
@@ -80,11 +62,6 @@ export function AssessmentResultPage() {
           <div className="mt-3">
             <SeverityBadge severity={assessment.overall_severity} />
           </div>
-        )}
-        {assessment.confidence_score !== null && (
-          <p className="mt-2 text-sm text-gray-500">
-            درجة الثقة: {formatArabicPercent(assessment.confidence_score * 100)}
-          </p>
         )}
       </div>
 
@@ -142,16 +119,18 @@ export function AssessmentResultPage() {
                 النسبة: {formatArabicPercent(domain.score_percent)}
               </p>
               <p className="mt-1 text-sm text-gray-700">{domain.recommendation}</p>
-              <p className="mt-1 text-xs text-gray-500">المتابعة: {domain.follow_up}</p>
+              <p className="mt-1 text-xs text-gray-500">
+                المتابعة: إعادة التقييم بعد أسبوع وتحديث الخطة
+              </p>
             </div>
           ))}
         </div>
       </Card>
 
-      {(generateReport.isError || generateWeeklyPlan.isError || createFollowup.isError) && (
+      {(generateReport.isError || generateWeeklyPlan.isError) && (
         <p role="alert" className="text-center text-sm text-danger-600">
           {getArabicErrorMessage(
-            generateReport.error ?? generateWeeklyPlan.error ?? createFollowup.error,
+            generateReport.error ?? generateWeeklyPlan.error,
           )}
         </p>
       )}
@@ -167,15 +146,6 @@ export function AssessmentResultPage() {
         >
           إنشاء الخطة الأسبوعية
         </Button>
-        {hasPreviousCompletedAssessment && (
-          <Button
-            variant="secondary"
-            isLoading={createFollowup.isPending}
-            onClick={handleCompareWithPrevious}
-          >
-            إكمال المتابعة الأسبوعية
-          </Button>
-        )}
       </div>
     </div>
   );

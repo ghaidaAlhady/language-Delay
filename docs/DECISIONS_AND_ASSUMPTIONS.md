@@ -87,19 +87,25 @@ Per-domain severities/referrals are aggregated to a single overall value using
 safest, most conservative choice per `CLAUDE.md`'s decision-making rules.
 
 ### Weekly-goal / next-reassessment text
-Reports and follow-ups derive a "weekly goal" sentence and a reassessment-interval string
-from the single worst-scoring domain's KB03 recommendation/follow-up text (never freely
-generated), via the shared `pick_priority_domain` helper (`app/services/domain_priority.py`).
+Reports derive a "weekly goal" sentence from the single worst-scoring domain's KB03
+recommendation via the shared `pick_priority_domain` helper
+(`app/services/domain_priority.py`). User-facing reassessment timing is deliberately
+normalized to the approved weekly workflow:
+`إعادة التقييم بعد أسبوع وتحديث الخطة`. This presentation-only correction does not change
+initial scoring, severity, specialist-referral rules, or KB03 content.
 
-### "Follow-up" = reassessment using the same KB05 question set
-`PROJECT_SPEC.md` says "the parent answers follow-up questions" but no distinct follow-up
-question bank exists anywhere in the supplied knowledge base — only KB05's assessment
-questions. Inventing a second question set would violate "use only the supplied KB." This
-session treats a follow-up as: start a new assessment (`POST /children/{id}/assessments`),
-answer/complete it via the normal flow, then call
-`POST /assessments/{id}/followup` to compare it against the child's previous completed
-assessment, produce a KB04-grounded progress narrative, and auto-regenerate the weekly plan.
-See `app/services/followup_service.py`.
+### Weekly follow-up uses plan-linked KB06 questions
+The focused corrections checkpoint added `knowledge_base/KB06.json` as a distinct,
+deterministic weekly-progress source. KB05 remains exclusive to the broad initial assessment.
+After every activity in the exact current active plan is complete, the backend selects 5–8
+KB06 questions using child age, plan domains/goals, and the plan's real KB02 activity IDs.
+Specific activity/domain matches are preferred; a small same-domain generic template is used
+only when no specific match exists. The full KB05 initial assessment is never a fallback.
+
+Answers and the exact selected-question context are stored against the child, parent, and
+weekly-plan ID. Submission is idempotent per plan, produces non-diagnostic weekly progress,
+soft-deactivates the completed plan, and generates the next plan through the existing
+deterministic `WeeklyPlanService`. See `app/services/followup_service.py`.
 
 ### Weekly-plan generation and "only the latest plan is active"
 `CLAUDE.md`'s DB section says "Only the latest weekly plan should be marked as active" —

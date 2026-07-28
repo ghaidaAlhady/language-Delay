@@ -104,7 +104,7 @@ export function ReportPage() {
       <Card>
         <h2 className="mb-1 font-semibold text-primary-900">الهدف الأسبوعي</h2>
         <p className="text-sm text-gray-700">{report.weekly_goal}</p>
-        <p className="mt-3 text-sm text-gray-600">موعد إعادة التقييم المقترح: {report.next_reassessment}</p>
+        <p className="mt-3 text-sm text-gray-600">المتابعة: {report.next_reassessment}</p>
       </Card>
 
       <Card className="border-2 border-primary-200 bg-primary-50 text-sm text-primary-900">

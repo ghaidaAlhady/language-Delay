@@ -106,17 +106,24 @@ report — see `docs/SECURITY_PRIVACY.md`).
 
 ## Follow-up / reassessment
 
-| Method | Path                                     | Rate limit | Description |
-|--------|--------------------------------------------|-----------|-------------|
-| POST   | `/assessments/{assessment_id}/followup`    | 20/min | Compare a completed assessment to the child's previous one; `400` if there is no previous completed assessment (first-ever assessment gets a report, not a follow-up). Auto-regenerates the weekly plan. Idempotent. `201`. |
-| GET    | `/children/{child_id}/followups`           | — | History for the child. |
-| GET    | `/followups/{followup_id}`                 | — | Detail. |
+| Method | Path                                                   | Rate limit | Description |
+|--------|--------------------------------------------------------|-----------|-------------|
+| GET    | `/weekly-plans/{weekly_plan_id}/followup-questions`     | — | Return the exact owned, active, fully-completed plan context plus 5–8 deterministic KB06 questions matched to age/domain/goal and approved KB02 activities. |
+| POST   | `/weekly-plans/{weekly_plan_id}/followup`               | 20/min | Validate and store one complete KB06 answer set, calculate non-diagnostic weekly progress, deactivate the evaluated plan, and generate the replacement plan. Idempotent per weekly plan. `201`. |
+| GET    | `/children/{child_id}/followups`                        | — | History for the child. |
+| GET    | `/followups/{followup_id}`                              | — | Detail. |
 
-### Follow-up shape (`FollowupResponse`)
-`previous_assessment_id`/`current_assessment_id`, `previous_score_percent`/
-`current_score_percent`/`improvement_percent` (average across domains), `improved_domains`,
-`support_needed_domains`, `comment` (KB04 "تحسن" narrative if improved, else the matching
-severity narrative), `next_goal`.
+### Weekly follow-up context and result shapes
+
+`WeeklyFollowupContextResponse` includes child/plan context, plan completion counts, weekly
+goals, and `questions[]`. Every question carries its generated plan-bound ID, KB06 source ID,
+domain, goal/skill, real KB02 activity ID/name, expected observable behavior, Arabic text,
+response type/weight, and whether the same-domain generic fallback was used.
+
+`FollowupResponse` includes `weekly_plan_id`; legacy assessment links remain nullable for
+backward-compatible reads. Its score fields are deterministic indicators of weekly-plan
+activity/skill progress, not a new initial-assessment score or diagnosis. It also returns
+improved/support-needed domains, a non-diagnostic comment, and the next goal.
 
 ## Not implemented this session
 Google Sign-In, chatbot, privacy/terms acknowledgment endpoints — see

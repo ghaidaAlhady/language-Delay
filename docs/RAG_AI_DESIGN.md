@@ -15,10 +15,13 @@ progress) is produced by the deterministic pipeline described below, which *is* 
 
 ```
 knowledge_base/KB0{1..5}.xlsx
+knowledge_base/KB06.json
         │  openpyxl via pandas.read_excel, sheet_name=None
+        │  JSON structural validation
         ▼
 app/rag/loader.py           — structural validation: every required sheet and column
-        │                       must be present, or KnowledgeBaseLoadError (fail fast at
+        │                       (or KB06 field) must be present, or KnowledgeBaseLoadError
+        │                       (fail fast at
         │                       startup, not per-request)
         ▼
 app/rag/normalizer.py       — row -> typed Pydantic record, with domain/severity/referral/
@@ -26,7 +29,7 @@ app/rag/normalizer.py       — row -> typed Pydantic record, with domain/severi
         │                       app/rag/schemas.py; parses KB03 score conditions and
         │                       KB03/KB05 ID-range shorthand (app/rag/parsing.py)
         ▼
-app/rag/builder.py          — assembles the five normalized record sets into one
+app/rag/builder.py          — assembles the six normalized record sets into one
         │                       immutable KnowledgeBase
         ▼
 KnowledgeBaseRepository     — builds lookup indices (by ID, by (age,domain), by severity
@@ -53,17 +56,20 @@ narrowly typed to one KB and one filter shape:
 | `get_decision_rule` / `get_score_band` | KB03 | age, domain, score % → severity band |
 | `get_narrative_template` | KB04 | status enum |
 | `get_reference` | KB01 References | citation code |
+| `select_weekly_followup_questions` | KB06 | age, plan ID/order, domain, goal/skill, KB02 activity IDs |
 
 ## Generation (deterministic, KB-grounded)
 
 | Artifact | Built from | Never contains |
 |---|---|---|
 | Domain score % | KB05 question weights (`scoring_service._weighted_answer_score`) | invented numbers |
-| Severity / referral / recommendation / follow-up interval | KB03 row matched by score band | paraphrased or invented text — `recommendation`/`follow_up` are the KB03 cell verbatim |
+| Severity / referral / recommendation | KB03 row matched by score band | paraphrased or invented clinical rules |
 | Suggested activities | KB03 `الأنشطة المقترحة` (+ round-robin top-up from the same age's KB02 pool if short of 14 for a weekly plan) | activities outside KB02 |
 | Strengths / support-needs skill names | KB01 milestone linked from each answered KB05 question | invented skill names |
-| Report summary / follow-up comment | KB04 narrative template selected by severity (or "تحسن" if improved) | LLM-generated prose |
-| Weekly goal / next reassessment | KB03 recommendation/follow-up text of the single worst-scoring domain, wrapped in a fixed Arabic sentence template | LLM-generated prose |
+| Report summary | KB04 narrative template selected by severity | LLM-generated prose |
+| Weekly goal / next reassessment | KB03 recommendation of the single worst-scoring domain plus the fixed approved weekly reassessment wording | LLM-generated prose |
+| Weekly follow-up questions | 5–8 KB06 records selected from the exact active plan's age/domain/goal and KB02 activities | KB05 initial-assessment questions or free-form text |
+| Weekly progress | persisted KB06 response weights and plan activity completion | a medical diagnosis or changed initial-assessment score |
 | Disclaimer | Fixed constant (`app/core/constants.py::DISCLAIMER_AR`), identical on every report | any diagnostic language — enforced by `tests/test_non_diagnostic.py` |
 
 ## Validation

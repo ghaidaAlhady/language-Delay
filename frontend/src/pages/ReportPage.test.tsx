@@ -14,6 +14,9 @@ describe("ReportPage", () => {
     expect(await screen.findByText("REP-0001")).toBeInTheDocument();
     expect(screen.getByText(/أظهر التقييم أن الطفل يحقق المهارات اللغوية المتوقعة/)).toBeInTheDocument();
     expect(screen.getByText(/لا يغني عن التقييم أو العلاج من قبل أخصائي تخاطب مؤهل/)).toBeInTheDocument();
+    expect(
+      screen.getByText("المتابعة: إعادة التقييم بعد أسبوع وتحديث الخطة"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "تحميل PDF" })).toBeInTheDocument();
   });
 });

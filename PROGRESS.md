@@ -73,7 +73,384 @@ None known as of this update. E2E suite execution is the next actual verificatio
 
 ## Current Agent Handoff
 
-### Authoritative Checkpoint 3 completion update (2026-07-26)
+### Authoritative focused-corrections handoff (2026-07-26)
+
+- **Repository path:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
+- **Current branch:** `feature/web-frontend`; no branch change was made.
+- **Latest commit:** `638b324ccd9b52ee424d1d584bd4c1580b96c134`
+  (`fix(followup): verify weekly follow-up persistence and plan linkage`).
+- **Working tree:** intentionally not clean. It contains the preserved, uncommitted
+  Checkpoint 4 files plus this focused correction checkpoint. No file was staged, committed,
+  pushed, reset, cleaned, reverted, or discarded. The local files `AGENTS.md`,
+  `agent_test.txt`, and `.claude/settings.local.json` remain preserved.
+- **Current milestone:** Milestone 1 — Project Stabilization.
+- **Current checkpoint:** Focused corrections after Checkpoint 4; implementation and required
+  verification are complete locally and awaiting explicit review.
+- **Last completed checkpoint in Git:** Checkpoint 3 at `638b324`.
+
+#### Defects confirmed and exact fixes
+
+- User-facing report/result timing could expose KB03 intervals of several weeks or months.
+  Reports now normalize the timing to `إعادة التقييم بعد أسبوع وتحديث الخطة`, and the result
+  and report pages consistently label it as weekly follow-up. Initial assessment scoring,
+  support level, referral, and KB01–KB05 content were not changed.
+- ReportLab used a font path that was not portable and could fall back to a non-Arabic font.
+  The backend now packages the redistributable SIL-OFL Tajawal font, shapes Arabic with
+  `arabic_reshaper`, applies bidirectional layout with `python-bidi`, wraps logical Arabic
+  words, and embeds the TrueType font in every Arabic PDF. A configured font remains an
+  optional override; an invalid override safely falls back to the packaged font.
+- The parent-facing assessment result displayed an unexplained confidence value. That
+  display was removed while preserving the backend field/calculation and all clinical rules.
+- Weekly activity controls used an unclear label and could dispatch two requests during a
+  rapid double click. They now display `تم` before completion and `مكتمل` after completion;
+  a synchronous in-flight guard prevents duplicate same-slot requests, while the persisted
+  backend state still supports reload and intentional un-completion.
+- A completed active plan had no clear follow-up action. The plan page now shows the approved
+  completion panel and routes to the exact child/plan only when all activities in the current
+  active plan are complete. It never creates a follow-up before answers are submitted and
+  disappears when the replacement plan becomes active.
+- Weekly follow-up reused the initial KB05 assessment. A distinct deterministic KB06 source
+  now supplies 5–8 observable, parent-friendly questions bound to the active plan's age,
+  domain, goal/skill metadata, and real KB02 activities. Specific activity/domain matches
+  are preferred; a same-domain generic template is used only when no specific match exists.
+  KB05 is not a follow-up fallback.
+
+#### KB06, persistence, ownership, and replacement-plan design
+
+- `knowledge_base/KB06.json` contains ten structured records: two specific templates for
+  each of the four language domains plus two generic domain-preserving fallbacks. Records
+  include age bounds, domain, goal/skill keys, applicable approved activity IDs, Arabic
+  question text, response type, required flag, deterministic weight, active flag, and a
+  non-diagnostic source note.
+- The KB loader, normalizer, typed schemas, builder, and repository load KB06 once and select
+  questions deterministically. Selection follows the stored plan activity order and returns
+  up to eight questions, with a minimum of five.
+- New plan-scoped endpoints are:
+  `GET /api/v1/weekly-plans/{plan_id}/followup-questions` and
+  `POST /api/v1/weekly-plans/{plan_id}/followup`. The legacy assessment-scoped creation
+  route no longer starts a KB05 follow-up.
+- Migration `5f31d8aee912_link_followups_to_weekly_plans.py` adds a unique weekly-plan link
+  plus persisted answers/question context while retaining compatibility with legacy rows.
+- The service verifies parent ownership, the exact current active plan, full plan completion,
+  the complete expected question set, and bounded response values. Ownership mismatches are
+  masked as 404; stale/inactive plan attempts are rejected.
+- Submission is idempotent per weekly plan at both service and database levels. The existing
+  record is returned on retries. A successful first submission stores its exact context and
+  answers, computes deterministic weekly-plan progress, deactivates the old plan, and creates
+  the next plan through the existing approved weekly-plan service without creating a fake
+  second initial assessment.
+
+#### Test commands and exact results
+
+Backend:
+
+- Focused follow-up service tests — **7 passed**.
+- Focused follow-up API tests — **6 passed**.
+- Focused report/PDF groups — **12 passed**.
+- `.\.venv\Scripts\python.exe -m pytest -q` — **167 passed, 7 warnings in 51.84s**.
+- `.\.venv\Scripts\python.exe -m mypy app` — **passed; 67 source files checked**.
+- Ruff on every changed backend application/test file and the new migration — **passed**.
+- `ruff check .` — **not clean because of 37 pre-existing errors confined to old
+  `alembic/env.py` and old migration files**; no unrelated legacy lint was rewritten.
+- A disposable empty SQLite database upgraded through every migration to
+  `5f31d8aee912 (head)` successfully. Development and E2E databases were not migrated.
+
+Frontend:
+
+- Focused result/report/weekly-plan/reassessment tests — **13 passed**.
+- `npm.cmd run test -- --reporter=dot` — **109/109 passed in 22 files**.
+- `npm.cmd run typecheck` — **passed**.
+- `npx tsc --noEmit -p tsconfig.e2e.json` — **passed**.
+- `npm.cmd run lint` — **passed** with the pre-existing warning
+  `src/tests/test-utils.tsx:58 react(only-export-components)`.
+- `npm.cmd run build` — **passed** with Vite 8.1.5 (224 modules transformed).
+
+Desktop/Chromium E2E:
+
+- Focused Case 10 weekly follow-up flow — **1 passed**.
+- Focused Case 2 plus non-diagnostic/PDF flow — **3 passed**.
+- Stable focused total — **4/4 passed**.
+- Full Desktop/Chromium project, one worker and no retries — **27/27 passed in 5.4 minutes**.
+  This run included offline resilience, the complete plan-linked KB06 follow-up/replacement
+  flow, reload persistence, and a real UI PDF download with an embedded TrueType font.
+
+#### PDF verification and remaining issues
+
+- The packaged `Tajawal-Regular.ttf` includes Arabic cmap code points and is embedded as
+  `/FontFile2`; tests verify shaping produces Arabic presentation forms, no replacement
+  character is emitted, and the PDF retains its header and report ID.
+- No PDF rasterizer/OCR tool is installed in this environment, so pixel-level visual OCR is
+  not automated. Font coverage, shaping/bidi transformation, embedding, parsed structure,
+  and the real UI download are the reliable automated layers used here.
+- Full backend and frontend tests have no failing assertions. Full frontend lint has one
+  pre-existing warning. Repository-wide backend Ruff still reports the 37 legacy Alembic
+  errors described above.
+- Backend logs still report the pre-existing KB01/KB05 linked-milestone mismatch for some
+  age-four questions. It does not affect scoring, referral, follow-up selection, or test
+  success, and KB01–KB05 were intentionally preserved.
+- The formal Milestone 1 two-consecutive-clean-full-E2E acceptance gate has not yet been
+  completed: this checkpoint ran the requested full Desktop project once after focused
+  stability and it passed 27/27.
+
+#### Modified and untracked files
+
+Focused-correction tracked modifications:
+
+- `backend/app/api/v1/followups.py`
+- `backend/app/core/config.py`
+- `backend/app/core/constants.py`
+- `backend/app/models/followup.py`
+- `backend/app/rag/builder.py`
+- `backend/app/rag/loader.py`
+- `backend/app/rag/normalizer.py`
+- `backend/app/rag/schemas.py`
+- `backend/app/repositories/followup_repository.py`
+- `backend/app/repositories/knowledge_base_repository.py`
+- `backend/app/schemas/followup.py`
+- `backend/app/services/followup_service.py`
+- `backend/app/services/pdf_service.py`
+- `backend/app/services/report_service.py`
+- `backend/tests/test_followup_service.py`
+- `backend/tests/test_followups_api.py`
+- `backend/tests/test_pdf_service.py`
+- `backend/tests/test_report_service.py`
+- `backend/tests/test_reports_api.py`
+- `frontend/e2e/case-02-age-two-all-yes.spec.ts`
+- `frontend/e2e/case-10-followup-reassessment.spec.ts`
+- `frontend/e2e/non-diagnostic.spec.ts`
+- `frontend/src/api/followups.ts`
+- `frontend/src/api/queryKeys.ts`
+- `frontend/src/features/followup/useFollowups.ts`
+- `frontend/src/features/weeklyPlan/WeeklyActivityCard.tsx`
+- `frontend/src/pages/AssessmentResultPage.test.tsx`
+- `frontend/src/pages/AssessmentResultPage.tsx`
+- `frontend/src/pages/FollowupDetailPage.tsx`
+- `frontend/src/pages/ReassessmentPage.test.tsx`
+- `frontend/src/pages/ReassessmentPage.tsx`
+- `frontend/src/pages/ReportPage.test.tsx`
+- `frontend/src/pages/ReportPage.tsx`
+- `frontend/src/pages/WeeklyPlanPage.test.tsx`
+- `frontend/src/pages/WeeklyPlanPage.tsx`
+- `frontend/src/tests/fixtures.ts`
+- `frontend/src/tests/mocks/handlers.ts`
+- `frontend/src/types/api.ts`
+- `README.md`
+- `docs/API_SPEC.md`
+- `docs/DATABASE_SCHEMA.md`
+- `docs/DECISIONS_AND_ASSUMPTIONS.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/IMPLEMENTATION_STATUS.md`
+- `docs/RAG_AI_DESIGN.md`
+- `docs/TEST_PLAN.md`
+- `PROGRESS.md`
+
+Focused-correction untracked files:
+
+- `backend/alembic/versions/5f31d8aee912_link_followups_to_weekly_plans.py`
+- `backend/assets/fonts/OFL.txt`
+- `backend/assets/fonts/Tajawal-Regular.ttf`
+- `knowledge_base/KB06.json`
+
+Preserved pre-existing Checkpoint 4 modifications/untracked files:
+
+- `PROJECT_STATUS_AND_MILESTONES.md`
+- `frontend/src/features/children/useChildren.ts`
+- `frontend/src/features/children/useChildren.test.tsx`
+- `MANUAL_FRONTEND_TESTING_GUIDE.md`
+- `MILESTONE_1_STABILIZATION_REPORT.md`
+- `MILESTONE_2_GEMINI_PROPOSAL.md`
+
+Preserved local files outside this correction checkpoint:
+
+- `AGENTS.md`
+- `agent_test.txt`
+- `.claude/settings.local.json` (ignored)
+
+#### Exact next action and milestone readiness
+
+The exact next action is an explicit human review of the focused correction diff and the
+combined pre-existing documentation changes. If approved, stage and commit the correction
+files deliberately (use hunk staging for `README.md`/`PROGRESS.md` if the earlier Checkpoint 4
+documentation must remain a separate commit). Then run one more clean full Desktop/Chromium
+pass in a fresh isolated E2E database to satisfy the existing two-consecutive-run Milestone 1
+gate.
+
+All focused correction acceptance criteria are met, but **do not begin the separate
+Agent/Gemini architecture milestone yet**. It becomes safe only after explicit review,
+intentional commits that leave a controlled tree, and completion/waiver of the remaining
+Milestone 1 consecutive-run gate. No Gemini package, key, agent, model call, or deployment was
+added in this checkpoint.
+
+#### Safety warnings
+
+- Do not stage or commit `.claude/settings.local.json`, `agent_test.txt`, `.env` files,
+  secrets, API keys, databases, `node_modules`, build output, generated reports, logs,
+  screenshots, traces, videos, Playwright artifacts, or temporary files.
+- Do not mix the preserved Checkpoint 4 offline-resilience change with the focused correction
+  commit unless that combined scope is explicitly approved.
+- Preserve assessment scoring, specialist-referral rules, and KB01–KB05 content.
+- Suggested commit message after explicit review:
+  `fix(followup): add plan-linked weekly progress flow`
+
+#### Suggested prompt for the next coding agent
+
+> Review the completed focused corrections on branch `feature/web-frontend` at base commit
+> `638b324`. Read `AGENTS.md`, `CLAUDE.md`, `PROJECT_SPEC.md`, `CLAUDE_CODE_PROMPT.md`,
+> `PROGRESS.md`, and `PROJECT_STATUS_AND_MILESTONES.md`. Do not discard or mix the preserved
+> Checkpoint 4 work. Verify the plan-linked KB06 follow-up, weekly wording, parent-facing
+> confidence removal, completion CTA, and embedded Tajawal Arabic PDF. Do not change
+> assessment scoring, referral rules, or KB01–KB05. Do not add Gemini or an AI agent. After
+> explicit approval, stage only reviewed files, keep local settings/artifacts excluded, and
+> run one more fresh no-retry full Desktop/Chromium pass to close the Milestone 1 gate.
+
+### Historical Checkpoint 4 handoff (2026-07-26)
+
+- **Repository path:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
+- **Current branch:** `feature/web-frontend`; no branch change was made.
+- **Latest commit:** `638b324ccd9b52ee424d1d584bd4c1580b96c134`
+  (`fix(followup): verify weekly follow-up persistence and plan linkage`).
+- **Working tree:** intentionally not clean because Checkpoint 4 is uncommitted. The
+  pre-existing/requested untracked `AGENTS.md` and `agent_test.txt` are preserved.
+  `.claude/settings.local.json` is present and ignored/preserved.
+- **Current milestone:** Milestone 1 — Project Stabilization; formal acceptance is pending
+  the two-consecutive-clean-run E2E gate.
+- **Current checkpoint:** Checkpoint 4 — Final Regression, Documentation, and Manual
+  Testing Readiness; work is complete locally and awaiting review.
+- **Last completed checkpoint in Git:** Checkpoint 3 at `638b324`.
+
+#### Work completed
+
+- Re-ran backend and frontend regression checks, type-check, lint, and production build.
+- Re-ran the critical registration/login, child, assessment, result, weekly-plan,
+  follow-up, replacement-plan, and reload-persistence Desktop/Chromium flows.
+- Reproduced the offline failure independently. TanStack Query paused the create-child
+  mutation while offline, so the API client never returned the existing Arabic offline
+  error. Added `networkMode: "always"` only to `useCreateChild` and a hook regression test.
+- Verified the focused offline E2E passes after the fix.
+- Ran the complete desktop project once and reran its sole failure individually.
+- Verified port/database isolation and that `backend/language_delay.db` remained at
+  `520192` bytes with UTC modification time `2026-07-23 19:55:48`.
+- Stopped Checkpoint 4 test servers and removed the task-local bytecode cache, pytest temp
+  tree, Playwright `test-results`, and disposable E2E database.
+- Created the Milestone 1 report, manual testing guide, and Milestone 2 proposal; updated
+  project status and local-run documentation.
+
+#### Final test commands and exact results
+
+Backend:
+
+- `.\.venv\Scripts\python.exe -m pytest --collect-only -q` with a task-local
+  `PYTHONPYCACHEPREFIX` — **168 tests collected**.
+- Every collected backend test was executed in bounded file/logical groups with
+  `.\.venv\Scripts\python.exe -m pytest <files-or-node-ids> -q -s` — **168/168 passed**.
+  The groups totaled: age 15, auth service 9, auth API 11, child service 8, children API
+  8, CORS 3, health 2, assessment service 9, assessments API 11, KB/scoring/traceability/
+  non-diagnostic/PDF 51, follow-up/report/weekly-plan services 19, follow-up API 8,
+  knowledge-base API 5, reports API 4, and weekly-plans API 5.
+- A normal full-process run first failed while importing pandas with
+  `ValueError: bad marshal data (unknown type code)`. Fresh bytecode fixed import, but
+  several monolithic full-process attempts then hung in this Windows session. No test
+  assertion failed; exact bounded groups were used to complete and account for all 168.
+
+Frontend after the code change:
+
+- `npm.cmd run test -- --reporter=dot` — **107/107 passed in 22 files**.
+- `npm.cmd run typecheck` — **passed**.
+- `npm.cmd run lint` — **passed** with the pre-existing warning
+  `src/tests/test-utils.tsx:58 react(only-export-components)`.
+- `npm.cmd run build` — **passed**.
+
+Desktop/Chromium E2E, all with `PW_EXTERNAL_SERVERS=1`, isolated port 8001 database,
+one worker, and `--retries=0`:
+
+- Critical Case 1 registration/login — **passed** on individual rerun.
+- Critical Case 2 child creation/initial assessment/result — **passed**.
+- Critical Case 10 weekly plan/follow-up/progress/replacement plan/reload — **passed** on
+  individual rerun.
+- `resilience.spec.ts --grep "offline network condition"` — **1/1 passed** after the fix.
+- Full `node .\node_modules\@playwright\test\cli.js test
+  --project=desktop-chromium --retries=0 --reporter=line` —
+  **26 passed / 1 failed out of 27 in 4.6 minutes**.
+- Sole failed node, Case 9 unanswered-question protection — **passed 1/1** immediately when
+  rerun alone. The failure occurred during login: the browser showed a connection error
+  while the backend recorded HTTP 200.
+- A second complete run was intentionally not started because the first run and Windows
+  environment were not stable enough to produce a trustworthy consecutive result.
+
+#### Known remaining issues
+
+- Milestone 1's 27/27-twice gate is still unmet even though no focused functional test
+  remains failing.
+- The E2E session showed delayed Playwright server startup, one client `EADDRINUSE`, and a
+  large port-8001 TIME_WAIT backlog. This is classified as Windows/process/socket
+  environment flakiness.
+- Real login/register rate limits remain intentionally enabled and can still make heavy
+  repeated E2E load flaky. No final failure returned HTTP 429 and no security was weakened.
+- The backend virtual environment has corrupted pandas bytecode and should be recreated in
+  a separately approved maintenance step.
+- Frontend tests still print pre-existing non-failing React `act(...)` and unmatched-route
+  diagnostics.
+
+#### Current Checkpoint 4 files
+
+Tracked modifications:
+
+- `PROGRESS.md` — this authoritative handoff.
+- `PROJECT_STATUS_AND_MILESTONES.md` — current checkpoint/milestone and verified results.
+- `README.md` — accurate React/FastAPI Windows run and safety instructions.
+- `frontend/src/features/children/useChildren.ts` — narrow offline mutation behavior.
+
+New Checkpoint 4 files:
+
+- `MILESTONE_1_STABILIZATION_REPORT.md` — final regression and acceptance report.
+- `MANUAL_FRONTEND_TESTING_GUIDE.md` — local Windows manual flow.
+- `MILESTONE_2_GEMINI_PROPOSAL.md` — documentation proposal only.
+- `frontend/src/features/children/useChildren.test.tsx` — offline mutation regression test.
+
+Preserved local files that are not part of Checkpoint 4:
+
+- `AGENTS.md`
+- `agent_test.txt`
+- `.claude/settings.local.json` (ignored)
+
+#### Manual readiness, remaining work, and exact next action
+
+Manual frontend testing can begin using backend port 8000, the normal development
+database, and `MANUAL_FRONTEND_TESTING_GUIDE.md`. Do not use the E2E launcher, port 8001,
+or the disposable E2E database for manual testing.
+
+The exact next action is to review this Checkpoint 4 change set. Then, in a fresh Windows
+session with a healthy recreated Python virtual environment, run the complete
+Desktop/Chromium E2E project twice consecutively from fresh isolated E2E databases with
+retries disabled. If both runs pass 27/27, update the milestone documents to mark
+Milestone 1 accepted. Do not start Milestone 2 implementation automatically.
+
+#### Safety warnings
+
+- Do not commit, push, merge, reset, clean, revert, deploy, stage, or change branches
+  automatically.
+- Do not stage `AGENTS.md`, `agent_test.txt`, `.claude/settings.local.json`, `.env` files,
+  secrets, API keys, databases, `node_modules`, build output, logs, screenshots, traces,
+  videos, Playwright artifacts, or temporary files.
+- Assessment scoring, specialist-referral rules, and KB01–KB05 were preserved.
+- Suggested commit message after explicit review:
+  `fix(frontend): surface offline child submission errors`
+
+#### Suggested prompt for Claude Code or Codex
+
+> Continue Milestone 1 Checkpoint 4 verification only. Read `AGENTS.md`, `CLAUDE.md`,
+> `PROJECT_SPEC.md`, `CLAUDE_CODE_PROMPT.md`, `PROGRESS.md`,
+> `PROJECT_STATUS_AND_MILESTONES.md`, and `MILESTONE_1_STABILIZATION_REPORT.md`. Confirm
+> repository root, branch `feature/web-frontend`, Git status, and recent log without
+> changing Git state. Preserve all existing work and local files. In a fresh Windows
+> session with a healthy Python virtual environment, verify ports 4173/8001 are free and
+> run the complete Desktop/Chromium E2E project twice consecutively from fresh isolated
+> databases with retries disabled. Do not use or reset the development database, weaken
+> authentication/rate limits, change scoring/referral/KB content, or start Milestone 2.
+> Update the reports with exact results, stop test processes, remove generated artifacts,
+> and do not commit, push, merge, or deploy.
+
+### Historical Checkpoint 3 completion update (2026-07-26)
 
 - **Repository path:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
 - **Current branch:** `feature/web-frontend` (confirmed; no branch change was made).

@@ -21,6 +21,7 @@ export function FollowupDetailPage() {
   if (!followup) return null;
 
   const improved = followup.improvement_percent > 0;
+  const isWeeklyPlanProgress = followup.weekly_plan_id !== null;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -30,11 +31,17 @@ export function FollowupDetailPage() {
       </div>
 
       <Card className="grid grid-cols-2 gap-4 text-center sm:grid-cols-3">
-        <Stat label="النتيجة السابقة" value={formatArabicPercent(followup.previous_score_percent)} />
-        <Stat label="النتيجة الحالية" value={formatArabicPercent(followup.current_score_percent)} />
         <Stat
-          label="نسبة التحسن"
-          value={`${followup.improvement_percent > 0 ? "+" : ""}${formatArabicPercent(followup.improvement_percent)}`}
+          label={isWeeklyPlanProgress ? "إنجاز أنشطة الخطة" : "النتيجة السابقة"}
+          value={formatArabicPercent(followup.previous_score_percent)}
+        />
+        <Stat
+          label={isWeeklyPlanProgress ? "تحقق المهارات المستهدفة" : "النتيجة الحالية"}
+          value={formatArabicPercent(followup.current_score_percent)}
+        />
+        <Stat
+          label={isWeeklyPlanProgress ? "مؤشر التقدم الأسبوعي" : "نسبة التحسن"}
+          value={`${!isWeeklyPlanProgress && followup.improvement_percent > 0 ? "+" : ""}${formatArabicPercent(followup.improvement_percent)}`}
           highlight={improved}
         />
       </Card>

@@ -1,4 +1,5 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useRef, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "@/api/ApiError";
 import { Button } from "@/components/Button";
@@ -6,21 +7,45 @@ import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
 import { SkeletonCard } from "@/components/Skeleton";
-import { useAssessmentsForChild, useStartAssessment } from "@/features/assessment/useAssessments";
+import { ResponseScale } from "@/features/assessment/ResponseScale";
 import { useChild } from "@/features/children/useChildren";
+import {
+  useSubmitWeeklyFollowup,
+  useWeeklyFollowupQuestions,
+} from "@/features/followup/useFollowups";
 import { useActiveWeeklyPlan } from "@/features/weeklyPlan/useWeeklyPlan";
+import type { ResponseValue } from "@/types/api";
 import { getArabicErrorMessage } from "@/utils/errorMessages";
-import { formatArabicDate, formatArabicPercent } from "@/utils/formatArabic";
+import { formatArabicDate } from "@/utils/formatArabic";
 
 export function ReassessmentPage() {
   const { childId } = useParams<{ childId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const requestedPlanId = searchParams.get("planId");
   const childQuery = useChild(childId);
-  const assessmentsQuery = useAssessmentsForChild(childId);
   const activePlanQuery = useActiveWeeklyPlan(childId);
-  const startAssessment = useStartAssessment();
+  const activePlan = activePlanQuery.data;
+  const planMatchesRequest = !requestedPlanId || requestedPlanId === activePlan?.id;
+  const planIsComplete =
+    Boolean(activePlan?.is_active) &&
+    (activePlan?.total_activities ?? 0) > 0 &&
+    activePlan?.completed_count === activePlan?.total_activities;
+  const readyPlanId =
+    planMatchesRequest && planIsComplete ? activePlan?.id : undefined;
+  const contextQuery = useWeeklyFollowupQuestions(readyPlanId);
+  const submitFollowup = useSubmitWeeklyFollowup(
+    childId ?? "",
+    readyPlanId ?? "",
+  );
+  const [answers, setAnswers] = useState<Record<string, ResponseValue>>({});
+  const submissionInFlightRef = useRef(false);
 
-  if (childQuery.isPending || assessmentsQuery.isPending || activePlanQuery.isPending) {
+  if (
+    childQuery.isPending ||
+    activePlanQuery.isPending ||
+    (readyPlanId && contextQuery.isPending)
+  ) {
     return <SkeletonCard />;
   }
   if (childQuery.isError) {
@@ -31,51 +56,15 @@ export function ReassessmentPage() {
       />
     );
   }
-  if (assessmentsQuery.isError) {
-    return (
-      <ErrorState
-        message={getArabicErrorMessage(assessmentsQuery.error)}
-        onRetry={() => void assessmentsQuery.refetch()}
-      />
-    );
-  }
-
-  const completedAssessments = (assessmentsQuery.data ?? []).filter(
-    (a) => a.status === "completed",
-  );
-  const latestCompletedAssessment = completedAssessments[0];
-  const inProgress = (assessmentsQuery.data ?? []).find((a) => a.status === "in_progress");
-
-  if (completedAssessments.length === 0) {
-    return (
-      <EmptyState
-        title="لا توجد تقييمات سابقة"
-        description="يلزم إجراء تقييمين على الأقل للمقارنة."
-        action={
-          childId && (
-            <Link to={`/children/${childId}/assessment/intro`}>
-              <Button>ابدأ التقييم الأول</Button>
-            </Link>
-          )
-        }
-      />
-    );
-  }
 
   const noActivePlan =
-    activePlanQuery.error instanceof ApiError && activePlanQuery.error.status === 404;
+    activePlanQuery.error instanceof ApiError &&
+    activePlanQuery.error.status === 404;
   if (noActivePlan) {
     return (
       <EmptyState
         title="لا توجد خطة أسبوعية نشطة للمتابعة"
-        description="أنشئ الخطة الأسبوعية من نتيجة آخر تقييم قبل بدء المتابعة الأسبوعية."
-        action={
-          latestCompletedAssessment && (
-            <Link to={`/assessments/${latestCompletedAssessment.id}/result`}>
-              <Button>العودة إلى نتيجة التقييم</Button>
-            </Link>
-          )
-        }
+        description="أنشئ الخطة الأسبوعية من نتيجة التقييم قبل بدء المتابعة الأسبوعية."
       />
     );
   }
@@ -87,71 +76,161 @@ export function ReassessmentPage() {
       />
     );
   }
+  if (!activePlan || !childQuery.data) return null;
 
-  const child = childQuery.data;
-  const activePlan = activePlanQuery.data;
-  if (!child || !activePlan || !latestCompletedAssessment) return null;
-
-  if (activePlan.assessment_id !== latestCompletedAssessment.id) {
+  if (!planMatchesRequest) {
     return (
       <EmptyState
-        title="الخطة الأسبوعية لا تطابق آخر تقييم"
-        description="أنشئ خطة من نتيجة آخر تقييم مكتمل قبل بدء المتابعة الأسبوعية."
+        title="الخطة المحددة لم تعد نشطة"
+        description="تم إنشاء خطة أحدث. افتح الخطة الأسبوعية الحالية للمتابعة."
         action={
-          <Link to={`/assessments/${latestCompletedAssessment.id}/result`}>
-            <Button>العودة إلى نتيجة التقييم</Button>
-          </Link>
+          childId && (
+            <Link to={`/children/${childId}/weekly-plan`}>
+              <Button>عرض الخطة الحالية</Button>
+            </Link>
+          )
         }
       />
     );
   }
 
-  function handleStart(): void {
-    if (inProgress) {
-      navigate(`/assessments/${inProgress.id}/take`);
-      return;
-    }
-    if (!childId) return;
-    startAssessment.mutate(childId, {
-      onSuccess: (assessment) => navigate(`/assessments/${assessment.id}/take`),
-    });
+  if (!planIsComplete) {
+    return (
+      <EmptyState
+        title="أكمل الخطة الأسبوعية أولًا"
+        description="تظهر المتابعة الأسبوعية بعد إكمال جميع أنشطة الخطة النشطة."
+        action={
+          childId && (
+            <Link to={`/children/${childId}/weekly-plan`}>
+              <Button>العودة إلى الخطة الأسبوعية</Button>
+            </Link>
+          )
+        }
+      />
+    );
+  }
+
+  if (contextQuery.isError) {
+    return (
+      <ErrorState
+        message={getArabicErrorMessage(contextQuery.error)}
+        onRetry={() => void contextQuery.refetch()}
+      />
+    );
+  }
+
+  const context = contextQuery.data;
+  if (
+    !context ||
+    context.child_id !== childQuery.data.id ||
+    context.weekly_plan_id !== activePlan.id ||
+    context.questions.length < 5 ||
+    context.questions.length > 8
+  ) {
+    return <ErrorState message="تعذر تحميل أسئلة المتابعة الأسبوعية لهذه الخطة." />;
+  }
+
+  const allAnswered = context.questions.every((question) => answers[question.id]);
+
+  function handleSubmit(): void {
+    if (!allAnswered || submissionInFlightRef.current) return;
+    submissionInFlightRef.current = true;
+    submitFollowup.mutate(
+      {
+        answers: context!.questions.map((question) => ({
+          question_id: question.id,
+          response: answers[question.id]!,
+        })),
+      },
+      {
+        onSuccess: (followup) =>
+          navigate(`/followups/${followup.id}`, { replace: true }),
+        onSettled: () => {
+          submissionInFlightRef.current = false;
+        },
+      },
+    );
   }
 
   return (
-    <div className="mx-auto max-w-xl">
-      <h1 className="mb-6 text-2xl font-bold text-primary-900">المتابعة الأسبوعية</h1>
-      <div
-        data-testid="active-weekly-plan-context"
-        data-child-id={child.id}
-        data-plan-id={activePlan.id}
-        data-assessment-id={activePlan.assessment_id}
-      >
-        <Card className="mb-4 flex flex-col gap-2">
-          <h2 className="font-semibold text-primary-900">بيانات المتابعة</h2>
-          <p className="text-sm text-gray-700">الطفل: {child.name}</p>
-          <p className="text-sm text-gray-700">
-            الخطة النشطة منذ: {formatArabicDate(activePlan.generated_at)}
-          </p>
-          <p className="text-sm text-gray-700">
-            إنجاز الخطة: {activePlan.completed_count} من {activePlan.total_activities} (
-            {formatArabicPercent(activePlan.adherence_percent)})
-          </p>
-        </Card>
-      </div>
-      <Card className="flex flex-col gap-4">
-        <p className="text-gray-700">
-          أجب عن أسئلة المتابعة المعتمدة لمقارنة النتائج بآخر تقييم مكتمل، ومتابعة تقدّم الطفل،
-          وتحديث الخطة الأسبوعية تلقائيًا.
+    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-primary-900">المتابعة الأسبوعية</h1>
+        <p className="text-gray-600">
+          قيّم المهارات التي تدرب عليها الطفل في الخطة الحالية. هذه متابعة
+          للتقدم وليست تشخيصًا طبيًا.
         </p>
-        {startAssessment.isError && (
-          <p role="alert" className="text-sm text-danger-600">
-            {getArabicErrorMessage(startAssessment.error, "assessment-age")}
-          </p>
-        )}
-        <Button size="lg" isLoading={startAssessment.isPending} onClick={handleStart}>
-          {inProgress ? "متابعة أسئلة المتابعة الحالية" : "ابدأ أسئلة المتابعة الأسبوعية"}
-        </Button>
+      </div>
+
+      <Card
+        className="flex flex-col gap-2"
+        data-testid="active-weekly-plan-context"
+        data-child-id={context.child_id}
+        data-plan-id={context.weekly_plan_id}
+        data-assessment-id={context.assessment_id}
+      >
+        <h2 className="font-semibold text-primary-900">بيانات المتابعة</h2>
+        <p className="text-sm text-gray-700">الطفل: {context.child_name}</p>
+        <p className="text-sm text-gray-700">
+          الخطة النشطة منذ: {formatArabicDate(context.generated_at)}
+        </p>
+        <p className="text-sm text-gray-700">
+          إنجاز الخطة: {context.completed_count} من {context.total_activities}
+        </p>
+        <div className="mt-2">
+          <h3 className="text-sm font-semibold text-primary-900">أهداف الخطة الحالية</h3>
+          <ul className="mt-1 text-sm text-gray-700">
+            {context.weekly_goals.map((goal) => (
+              <li key={goal}>• {goal}</li>
+            ))}
+          </ul>
+        </div>
       </Card>
+
+      <div className="flex flex-col gap-4">
+        {context.questions.map((question, index) => (
+          <Card
+            key={question.id}
+            data-testid="kb06-weekly-question"
+            data-source-file={question.source_file}
+            data-activity-id={question.activity_id}
+          >
+            <p className="text-xs font-medium text-primary-500">
+              السؤال {index + 1} من {context.questions.length} • {question.domain}
+            </p>
+            <h2 className="mb-4 mt-1 font-semibold text-primary-900">
+              {question.question}
+            </h2>
+            <ResponseScale
+              value={answers[question.id] ?? null}
+              disabled={submitFollowup.isPending}
+              onChange={(response) =>
+                setAnswers((current) => ({
+                  ...current,
+                  [question.id]: response,
+                }))
+              }
+            />
+          </Card>
+        ))}
+      </div>
+
+      {submitFollowup.isError && (
+        <p role="alert" className="text-sm text-danger-600">
+          {getArabicErrorMessage(submitFollowup.error)}
+        </p>
+      )}
+
+      <div className="flex justify-center">
+        <Button
+          size="lg"
+          disabled={!allAnswered}
+          isLoading={submitFollowup.isPending}
+          onClick={handleSubmit}
+        >
+          إرسال المتابعة وإنشاء خطة الأسبوع القادم
+        </Button>
+      </div>
     </div>
   );
 }

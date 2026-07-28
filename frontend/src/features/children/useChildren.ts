@@ -23,6 +23,11 @@ export function useCreateChild() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: ChildCreateRequest) => childrenApi.createChild(payload),
+    // Let the API client handle an offline submission immediately instead of
+    // allowing TanStack Query to pause it until connectivity returns. The
+    // resulting NetworkError/TimeoutError is mapped to the Arabic offline
+    // message by AddChildPage.
+    networkMode: "always",
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.children.all });
     },

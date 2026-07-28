@@ -2,68 +2,123 @@ import { expect, test } from "@playwright/test";
 
 import {
   addChild,
-  answerRemainingQuestions,
   completeAssessment,
   loginExistingParent,
   SHARED_PARENT_EMAIL,
 } from "./helpers";
 
-// Two complete 20-question UI assessments plus plan/follow-up persistence
-// checks cannot reliably fit within Playwright's 30-second default.
-test.setTimeout(90_000);
+test.setTimeout(120_000);
 
-test("Case 10: weekly follow-up persists progress and replaces the active plan", async ({
+test("Case 10: completed plan opens KB06 follow-up once and activates a persistent replacement", async ({
   page,
   request,
 }) => {
   const childName = "طفل متابعة أسبوعية";
   await loginExistingParent(page, SHARED_PARENT_EMAIL);
-  const childId = await addChild(page, { name: childName, dateOfBirth: "2022-01-15" });
+  const childId = await addChild(page, {
+    name: childName,
+    dateOfBirth: "2022-01-15",
+  });
 
-  // Initial assessment: weak start (all-never), followed by a real active plan.
   await completeAssessment(page, childId, "all-never");
-  const firstAssessmentId = page.url().match(/\/assessments\/([^/]+)\/result$/)?.[1];
-  expect(firstAssessmentId).toBeTruthy();
+  const assessmentId = page.url().match(/\/assessments\/([^/]+)\/result$/)?.[1];
+  expect(assessmentId).toBeTruthy();
   const initialPlanResponsePromise = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      response.url().endsWith(`/api/v1/assessments/${firstAssessmentId}/weekly-plan`),
+      response
+        .url()
+        .endsWith(`/api/v1/assessments/${assessmentId}/weekly-plan`),
   );
   await page.getByRole("button", { name: "إنشاء الخطة الأسبوعية" }).click();
   const initialPlanResponse = await initialPlanResponsePromise;
   expect(initialPlanResponse.status()).toBe(201);
   const initialPlan = await initialPlanResponse.json();
   await expect(page).toHaveURL(/\/weekly-plan$/);
-  expect(initialPlan.child_id).toBe(childId);
-  expect(initialPlan.assessment_id).toBe(firstAssessmentId);
 
-  // Open weekly follow-up through normal app navigation, not a direct URL.
-  await page.getByRole("link", { name: "أطفالي", exact: true }).click();
-  await page.getByRole("link", { name: new RegExp(childName) }).click();
-  await page.getByRole("link", { name: "المتابعة الأسبوعية" }).click();
-  await expect(page).toHaveURL(/\/reassessment/);
+  // Complete each persisted activity through the real UI.
+  for (let index = 0; index < initialPlan.total_activities; index += 1) {
+    const completionResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().includes("/api/v1/weekly-plan-activities/"),
+    );
+    await page
+      .getByRole("button", { name: "تم", exact: true })
+      .first()
+      .click();
+    const response = await completionResponse;
+    expect(response.status()).toBe(200);
+    const persistedPlan = await response.json();
+    expect(persistedPlan.completed_count).toBe(index + 1);
+    await expect(
+      page.getByRole("button", { name: "مكتمل", exact: true }),
+    ).toHaveCount(index + 1);
+  }
+
+  await expect(page.getByText("أكملتم الخطة الأسبوعية")).toBeVisible();
+  await expect(
+    page.getByText("حان وقت تقييم تقدم الطفل وإنشاء خطة الأسبوع القادم."),
+  ).toBeVisible();
+  const followupCta = page.getByRole("link", {
+    name: "ابدأ المتابعة الأسبوعية",
+  });
+  await expect(followupCta).toHaveAttribute(
+    "href",
+    `/children/${childId}/reassessment?planId=${initialPlan.id}`,
+  );
+
+  // Completion and CTA survive a full reload.
+  await page.reload();
+  await expect(page.getByText("الإنجاز — 14 من 14")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "ابدأ المتابعة الأسبوعية" }),
+  ).toBeVisible();
+
+  // Open through normal navigation and verify exact child/plan context.
+  await page.getByRole("link", { name: "ابدأ المتابعة الأسبوعية" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/children/${childId}/reassessment\\?planId=${initialPlan.id}`),
+  );
   const activePlanContext = page.getByTestId("active-weekly-plan-context");
   await expect(activePlanContext).toHaveAttribute("data-child-id", childId);
-  await expect(activePlanContext).toHaveAttribute("data-plan-id", initialPlan.id);
+  await expect(activePlanContext).toHaveAttribute(
+    "data-plan-id",
+    initialPlan.id,
+  );
   await expect(activePlanContext).toHaveAttribute(
     "data-assessment-id",
-    firstAssessmentId as string,
+    assessmentId as string,
   );
   await expect(page.getByText(`الطفل: ${childName}`)).toBeVisible();
-  await expect(page.getByText(/الخطة النشطة منذ/)).toBeVisible();
 
-  await page.getByRole("button", { name: "ابدأ أسئلة المتابعة الأسبوعية" }).click();
-  await expect(page).toHaveURL(/\/assessments\/.+\/take/);
-  await answerRemainingQuestions(page, "all-always");
-  const secondAssessmentId = page.url().match(/\/assessments\/([^/]+)\/result$/)?.[1];
-  expect(secondAssessmentId).toBeTruthy();
-  expect(secondAssessmentId).not.toBe(firstAssessmentId);
+  const weeklyQuestions = page.getByTestId("kb06-weekly-question");
+  const questionCount = await weeklyQuestions.count();
+  expect(questionCount).toBeGreaterThanOrEqual(5);
+  expect(questionCount).toBeLessThanOrEqual(8);
+  for (let index = 0; index < questionCount; index += 1) {
+    await expect(weeklyQuestions.nth(index)).toHaveAttribute(
+      "data-source-file",
+      "KB06.json",
+    );
+  }
+  await expect(
+    page.getByText("هل يستجيب الطفل عند مناداة اسمه؟"),
+  ).toHaveCount(0);
+
+  for (const alwaysOption of await page
+    .getByRole("radio", { name: "دائمًا" })
+    .all()) {
+    await alwaysOption.click();
+  }
 
   let followupSubmissionCount = 0;
   page.on("request", (outgoingRequest) => {
     if (
       outgoingRequest.method() === "POST" &&
-      outgoingRequest.url().endsWith(`/api/v1/assessments/${secondAssessmentId}/followup`)
+      outgoingRequest
+        .url()
+        .endsWith(`/api/v1/weekly-plans/${initialPlan.id}/followup`)
     ) {
       followupSubmissionCount += 1;
     }
@@ -71,30 +126,34 @@ test("Case 10: weekly follow-up persists progress and replaces the active plan",
   const followupResponsePromise = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      response.url().endsWith(`/api/v1/assessments/${secondAssessmentId}/followup`),
+      response
+        .url()
+        .endsWith(`/api/v1/weekly-plans/${initialPlan.id}/followup`),
   );
-  const followupButton = page.getByRole("button", { name: "إكمال المتابعة الأسبوعية" });
-  await followupButton.evaluate((button) => {
-    const followupButtonElement = button as HTMLButtonElement;
-    followupButtonElement.click();
-    followupButtonElement.click();
+  const submitButton = page.getByRole("button", {
+    name: "إرسال المتابعة وإنشاء خطة الأسبوع القادم",
+  });
+  await submitButton.evaluate((button) => {
+    const element = button as HTMLButtonElement;
+    element.click();
+    element.click();
   });
   const followupResponse = await followupResponsePromise;
   expect(followupResponse.status()).toBe(201);
   const followup = await followupResponse.json();
   expect(followup.child_id).toBe(childId);
-  expect(followup.previous_assessment_id).toBe(firstAssessmentId);
-  expect(followup.current_assessment_id).toBe(secondAssessmentId);
+  expect(followup.weekly_plan_id).toBe(initialPlan.id);
+  expect(followup.previous_assessment_id).toBe(assessmentId);
+  expect(followup.current_assessment_id).toBeNull();
   expect(followupSubmissionCount).toBe(1);
 
   await expect(page).toHaveURL(/\/followups\/.+/);
   const followupUrl = page.url();
   await expect(page.getByText("نتيجة المتابعة الأسبوعية")).toBeVisible();
-  await expect(page.getByText("النتيجة السابقة")).toBeVisible();
-  await expect(page.getByText("النتيجة الحالية")).toBeVisible();
-  await expect(page.getByText("نسبة التحسن")).toBeVisible();
+  await expect(page.getByText("إنجاز أنشطة الخطة")).toBeVisible();
+  await expect(page.getByText("تحقق المهارات المستهدفة")).toBeVisible();
+  await expect(page.getByText("مؤشر التقدم الأسبوعي")).toBeVisible();
 
-  // The UI-authenticated request can verify persistence without another login.
   const authorization = followupResponse.request().headers()["authorization"];
   expect(authorization).toBeTruthy();
   const apiOrigin = new URL(followupResponse.url()).origin;
@@ -103,39 +162,37 @@ test("Case 10: weekly follow-up persists progress and replaces the active plan",
     { headers: { Authorization: authorization } },
   );
   expect(persistedFollowups.status()).toBe(200);
-  const persistedFollowupRows = await persistedFollowups.json();
-  expect(persistedFollowupRows).toHaveLength(1);
-  expect(persistedFollowupRows[0].id).toBe(followup.id);
+  const persistedRows = await persistedFollowups.json();
+  expect(persistedRows).toHaveLength(1);
+  expect(persistedRows[0].id).toBe(followup.id);
 
-  // Follow-up detail remains available after a full reload.
   await page.reload();
   await expect(page).toHaveURL(followupUrl);
-  await expect(page.getByText("نتيجة المتابعة الأسبوعية")).toBeVisible();
-  await expect(page.getByText("نسبة التحسن")).toBeVisible();
+  await expect(page.getByText("مؤشر التقدم الأسبوعي")).toBeVisible();
 
-  // Follow-up auto-regenerates and persists a different active weekly plan.
   const replacementPlanResponsePromise = page.waitForResponse(
     (response) =>
       response.request().method() === "GET" &&
       response.url().endsWith(`/api/v1/children/${childId}/weekly-plan`),
   );
-  await page.getByRole("button", { name: "عرض الخطة الأسبوعية المحدّثة" }).click();
-  const replacementPlanResponse = await replacementPlanResponsePromise;
-  const replacementPlan = await replacementPlanResponse.json();
-  await expect(page).toHaveURL(/\/weekly-plan$/);
-  await expect(page.getByText("الخطة الأسبوعية")).toBeVisible();
+  await page
+    .getByRole("button", { name: "عرض الخطة الأسبوعية المحدّثة" })
+    .click();
+  const replacementPlan = await (
+    await replacementPlanResponsePromise
+  ).json();
   expect(replacementPlan.id).not.toBe(initialPlan.id);
-  expect(replacementPlan.child_id).toBe(childId);
-  expect(replacementPlan.assessment_id).toBe(secondAssessmentId);
+  expect(replacementPlan.assessment_id).toBe(assessmentId);
+  expect(replacementPlan.completed_count).toBe(0);
+  await expect(page.getByText("أكملتم الخطة الأسبوعية")).toHaveCount(0);
 
-  const reloadedPlanResponsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "GET" &&
-      response.url().endsWith(`/api/v1/children/${childId}/weekly-plan`),
-  );
   await page.reload();
-  const reloadedPlanResponse = await reloadedPlanResponsePromise;
-  const reloadedPlan = await reloadedPlanResponse.json();
-  expect(reloadedPlan.id).toBe(replacementPlan.id);
-  expect(reloadedPlan.assessment_id).toBe(secondAssessmentId);
+  await expect(page.getByText("الإنجاز — 0 من 14")).toBeVisible();
+  await expect(page.getByText("أكملتم الخطة الأسبوعية")).toHaveCount(0);
+
+  const staleQuestions = await request.get(
+    `${apiOrigin}/api/v1/weekly-plans/${initialPlan.id}/followup-questions`,
+    { headers: { Authorization: authorization } },
+  );
+  expect(staleQuestions.status()).toBe(409);
 });

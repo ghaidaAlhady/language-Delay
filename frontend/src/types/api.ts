@@ -230,11 +230,47 @@ export interface ActivityCompletionRequest {
 
 // ---- Follow-up / reassessment -------------------------------------------------
 
+export interface WeeklyFollowupQuestionResponse {
+  id: string;
+  source_question_id: string;
+  source_file: string;
+  weekly_plan_id: string;
+  age: number;
+  domain: Domain;
+  weekly_goal: string;
+  skill: string;
+  activity_id: string;
+  activity_name: string;
+  expected_behavior: string;
+  question: string;
+  response_type: string;
+  required: boolean;
+  progress_weight: number;
+  fallback_used: boolean;
+}
+
+export interface WeeklyFollowupContextResponse {
+  child_id: string;
+  child_name: string;
+  weekly_plan_id: string;
+  assessment_id: string;
+  generated_at: string;
+  completed_count: number;
+  total_activities: number;
+  weekly_goals: string[];
+  questions: WeeklyFollowupQuestionResponse[];
+}
+
+export interface WeeklyFollowupSubmissionRequest {
+  answers: AnswerItem[];
+}
+
 export interface FollowupResponse {
   id: string;
   child_id: string;
   previous_assessment_id: string;
-  current_assessment_id: string;
+  current_assessment_id: string | null;
+  weekly_plan_id: string | null;
   previous_score_percent: number;
   current_score_percent: number;
   improvement_percent: number;

@@ -21,5 +21,7 @@ export const queryKeys = {
   followups: {
     forChild: (childId: string) => ["followups", "byChild", childId] as const,
     detail: (followupId: string) => ["followups", followupId] as const,
+    questions: (weeklyPlanId: string) =>
+      ["followups", "questions", weeklyPlanId] as const,
   },
 } as const;

@@ -5,6 +5,7 @@ import type {
   FollowupResponse,
   ReportResponse,
   UserResponse,
+  WeeklyFollowupContextResponse,
   WeeklyPlanResponse,
 } from "@/types/api";
 
@@ -118,7 +119,7 @@ export const fixtureReport: ReportResponse = {
   summary_text: "أظهر التقييم أن الطفل يحقق المهارات اللغوية المتوقعة لعمره.",
   weekly_goal: "التركيز على اللغة الاستقبالية.",
   recommended_activity_ids: ["A001", "A002"],
-  next_reassessment: "3 أشهر",
+  next_reassessment: "إعادة التقييم بعد أسبوع وتحديث الخطة",
   disclaimer:
     "هذا التطبيق أداة داعمة لولي الأمر ولا يغني عن التقييم أو العلاج من قبل أخصائي تخاطب مؤهل.",
 };
@@ -190,13 +191,46 @@ export const fixtureFollowup: FollowupResponse = {
   id: "followup-1",
   child_id: "child-1",
   previous_assessment_id: "assessment-1",
-  current_assessment_id: "assessment-2",
-  previous_score_percent: 25,
+  current_assessment_id: null,
+  weekly_plan_id: "plan-1",
+  previous_score_percent: 100,
   current_score_percent: 100,
-  improvement_percent: 75,
+  improvement_percent: 100,
   improved_domains: ["اللغة الاستقبالية"],
   support_needed_domains: [],
   comment: "أظهر الطفل تحسنًا في مهارات اللغة.",
   next_goal: "الاستمرار في دعم مهارات اللغة الاستقبالية.",
   created_at: "2026-01-08T00:00:00Z",
+};
+
+export const fixtureWeeklyFollowupContext: WeeklyFollowupContextResponse = {
+  child_id: "child-1",
+  child_name: "سارة",
+  weekly_plan_id: "plan-1",
+  assessment_id: "assessment-1",
+  generated_at: "2026-01-01T00:20:00Z",
+  completed_count: 2,
+  total_activities: 2,
+  weekly_goals: ["تحسين فهم التعليمات", "تحسين فهم الإشارة"],
+  questions: Array.from({ length: 5 }, (_, index) => {
+    const activity = fixtureWeeklyPlan.activities[index % fixtureWeeklyPlan.activities.length]!;
+    return {
+      id: `K6R${index + 1}-${activity.activity.id}`,
+      source_question_id: `K6R${index + 1}`,
+      source_file: "KB06.json",
+      weekly_plan_id: "plan-1",
+      age: 4,
+      domain: activity.activity.domain,
+      weekly_goal: activity.activity.goal,
+      skill: activity.activity.target_skill,
+      activity_id: activity.activity.id,
+      activity_name: activity.activity.name,
+      expected_behavior: activity.activity.expected_outcome,
+      question: `خلال هذا الأسبوع، كم مرة استخدم الطفل مهارة «${activity.activity.target_skill}» أثناء نشاط «${activity.activity.name}»؟`,
+      response_type: "frequency_5",
+      required: true,
+      progress_weight: 1,
+      fallback_used: false,
+    };
+  }),
 };

@@ -1,9 +1,25 @@
 import { apiRequest } from "@/api/client";
-import type { FollowupResponse } from "@/types/api";
+import type {
+  FollowupResponse,
+  WeeklyFollowupContextResponse,
+  WeeklyFollowupSubmissionRequest,
+} from "@/types/api";
 
-export function createFollowup(assessmentId: string): Promise<FollowupResponse> {
-  return apiRequest<FollowupResponse>(`/api/v1/assessments/${assessmentId}/followup`, {
+export function getWeeklyFollowupQuestions(
+  weeklyPlanId: string,
+): Promise<WeeklyFollowupContextResponse> {
+  return apiRequest<WeeklyFollowupContextResponse>(
+    `/api/v1/weekly-plans/${weeklyPlanId}/followup-questions`,
+  );
+}
+
+export function submitWeeklyFollowup(
+  weeklyPlanId: string,
+  payload: WeeklyFollowupSubmissionRequest,
+): Promise<FollowupResponse> {
+  return apiRequest<FollowupResponse>(`/api/v1/weekly-plans/${weeklyPlanId}/followup`, {
     method: "POST",
+    body: payload,
   });
 }
 

@@ -9,5 +9,8 @@ test("Case 2: two-year-old child with an all-Yes (always) assessment scores full
   await completeAssessment(page, childId, "all-always");
 
   await expect(page.getByText("طبيعي").first()).toBeVisible();
-  await expect(page.getByText("درجة الثقة: ١٠٠%")).toBeVisible();
+  await expect(page.getByText(/درجة الثقة/)).toHaveCount(0);
+  await expect(
+    page.getByText("المتابعة: إعادة التقييم بعد أسبوع وتحديث الخطة").first(),
+  ).toBeVisible();
 });

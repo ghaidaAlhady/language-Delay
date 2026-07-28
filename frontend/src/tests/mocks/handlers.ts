@@ -12,6 +12,7 @@ import {
   fixtureQuestions,
   fixtureReport,
   fixtureUser,
+  fixtureWeeklyFollowupContext,
   fixtureWeeklyPlan,
 } from "@/tests/fixtures";
 
@@ -42,4 +43,7 @@ export const handlers = [
   http.get(`${BASE}/api/v1/reports/:reportId`, () => HttpResponse.json(fixtureReport)),
 
   http.get(`${BASE}/api/v1/children/:childId/weekly-plan`, () => HttpResponse.json(fixtureWeeklyPlan)),
+  http.get(`${BASE}/api/v1/weekly-plans/:planId/followup-questions`, () =>
+    HttpResponse.json(fixtureWeeklyFollowupContext),
+  ),
 ];

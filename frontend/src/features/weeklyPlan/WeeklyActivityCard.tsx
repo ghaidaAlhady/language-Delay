@@ -24,7 +24,7 @@ export function WeeklyActivityCard({
           <p className="text-xs text-primary-500">{activity.domain}</p>
           <h3 className="font-semibold text-primary-900">{activity.name}</h3>
         </div>
-        {slot.completed && <span className="text-sm font-medium text-success-600">تم الإنجاز ✓</span>}
+        {slot.completed && <span className="text-sm font-medium text-success-600">مكتمل ✓</span>}
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-gray-700">
@@ -56,8 +56,9 @@ export function WeeklyActivityCard({
           variant={slot.completed ? "outline" : "primary"}
           isLoading={isUpdating}
           onClick={onToggleCompleted}
+          title={slot.completed ? "اضغط لإلغاء الإنجاز" : "تأكيد إنجاز النشاط"}
         >
-          {slot.completed ? "إلغاء الإنجاز" : "تحديد كمكتمل"}
+          {slot.completed ? "مكتمل" : "تم"}
         </Button>
         <Button size="sm" variant="ghost" isLoading={isUpdating} onClick={onRequestAlternative}>
           طلب نشاط بديل

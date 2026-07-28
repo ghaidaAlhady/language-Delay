@@ -34,7 +34,8 @@ history retrieval.
 ## Phase 6 — Activities & reports
 KB02 activity/KB01 reference browse endpoints, deterministic Arabic report generation from
 KB04 narrative templates, Arabic-shaped PDF export (`arabic_reshaper` + `python-bidi` +
-ReportLab) with a deployment-configurable font path.
+ReportLab) with an embedded, packaged SIL-OFL Tajawal font and an optional
+deployment-configurable override.
 
 ## Phase 7 — Weekly plan
 7-day × 2-activity generation from KB03-suggested activities (worst-domain-first) with
@@ -42,9 +43,11 @@ round-robin top-up across domains, completion tracking + adherence calculation,
 single-active-plan enforcement (soft-deactivate, not delete), alternative-activity swap.
 
 ## Phase 8 — Follow-up & reassessment
-Reuses the assessment flow for reassessment (no separate question bank — see
-`DECISIONS_AND_ASSUMPTIONS.md`), compares against the child's previous completed assessment,
-produces a KB04-grounded progress narrative, auto-regenerates the weekly plan.
+Uses 5–8 deterministic plan-linked questions from `knowledge_base/KB06.json`, selected by
+age, goal/domain, and approved KB02 activity. Stores the exact question context and answers
+against the owned active weekly plan, computes non-diagnostic weekly progress, and
+idempotently generates the replacement plan through the existing weekly-plan service. KB05
+remains exclusive to initial assessment.
 
 ## Phase 9 — Cross-cutting hardening
 Request logging middleware (no PII/body logging), rate limits extended to the

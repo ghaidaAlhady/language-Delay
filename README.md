@@ -1,64 +1,106 @@
 # Smart Guide for Children's Language Delay
 
-AI-powered bilingual mobile application for supportive early screening and personalized home guidance for children aged 2–5.
+An Arabic-first web application that gives parents supportive, evidence-based guidance
+about early language development for children aged 2–5.
 
-> This product is not a medical diagnostic tool and does not replace a qualified speech-language pathologist or healthcare professional.
+> This application is a decision-support tool. It does not diagnose a child and does not
+> replace assessment or treatment by a qualified Speech-Language Therapist.
 
-## Repository status
+## Current implementation
 
-The **FastAPI backend is implemented and tested** (auth, child profiles, assessment, deterministic scoring, reports/PDF, weekly plans, follow-up/reassessment — see `docs/IMPLEMENTATION_STATUS.md` for the full breakdown). The Flutter mobile app has not been started yet.
+- Web frontend: React 19, TypeScript, Vite, Tailwind CSS, TanStack Query, and Playwright.
+- Backend: FastAPI, SQLAlchemy, Alembic, and SQLite.
+- Knowledge base: the approved KB01–KB05 workbooks plus the structured, deterministic
+  `knowledge_base/KB06.json` weekly-follow-up source.
+- Assessment scoring, specialist-referral decisions, reports, and weekly plans are currently
+  deterministic and knowledge-base driven.
+- No Gemini or other LLM integration is implemented.
 
-Run locally: see "How to run locally" in `docs/IMPLEMENTATION_STATUS.md`, or:
+The implemented MVP includes parent authentication, child profiles, initial assessment,
+results, reports/PDF, weekly plans, weekly follow-up, progress comparison, and persisted
+data after reload/login.
 
-```bash
-cd backend
-python -m venv .venv && source .venv/Scripts/activate
-pip install -r requirements.txt -r requirements-dev.txt
-cp .env.example .env   # then set SECRET_KEY
+### Weekly follow-up workflow
+
+Initial assessment and weekly follow-up are separate flows. KB05 remains the broad,
+age-appropriate initial assessment. After every required activity in the current active plan
+is complete, the parent can open a plan-linked weekly follow-up containing 5–8 deterministic
+KB06 questions matched to the child's age, plan domains, goals, and approved KB02 activities.
+Submitting once stores the answers and weekly progress, deactivates the completed plan, and
+creates the next active plan through the existing deterministic plan service. Retries are
+idempotent, and ownership is checked through the child and exact weekly plan.
+
+Arabic PDF reports use the packaged SIL Open Font License Tajawal asset, Arabic shaping, and
+bidirectional layout. The font is embedded in each PDF, so Arabic output does not depend on a
+private font installed on the host machine.
+
+## Local Windows setup
+
+Use two PowerShell terminals.
+
+Backend:
+
+```powershell
+cd "C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub\backend"
+.\.venv\Scripts\Activate.ps1
 alembic upgrade head
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8000
 ```
 
-Then open `http://127.0.0.1:8000/docs`.
+Frontend:
+
+```powershell
+cd "C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub\frontend"
+npm install
+npm run dev
+```
+
+Expected local URLs:
+
+- Backend: `http://127.0.0.1:8000`
+- API documentation: `http://127.0.0.1:8000/docs`
+- Frontend: the URL printed by Vite, normally `http://localhost:5173`
+
+See [MANUAL_FRONTEND_TESTING_GUIDE.md](MANUAL_FRONTEND_TESTING_GUIDE.md) for the complete
+manual flow and troubleshooting.
+
+## Verification commands
+
+Backend:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm run test
+npm run typecheck
+npm run lint
+npm run build
+```
+
+The E2E runner is intentionally isolated from manual development. It uses backend port
+`8001`, frontend port `4173`, and `backend/language_delay_e2e.db`. Do not use the E2E
+launcher or port 8001 for manual testing.
 
 ## Important files
 
-- `CLAUDE_CODE_PROMPT.md` — master implementation prompt
-- `CLAUDE.md` — persistent repository instructions for Claude Code
-- `PROJECT_SPEC.md` — approved source of truth
-- `knowledge_base/` — KB01–KB05 Excel workbooks
-- `dataset/` — CSV, JSON, and JSONL exports
-- `docs/` — required product and engineering documents
+- `CLAUDE.md` and `AGENTS.md` — agent workflow and safety instructions.
+- `PROJECT_SPEC.md` — approved product requirements.
+- `PROJECT_STATUS_AND_MILESTONES.md` — current milestone status.
+- `PROGRESS.md` — latest agent handoff and verification record.
+- `MILESTONE_1_STABILIZATION_REPORT.md` — Milestone 1 regression report.
+- `MILESTONE_2_GEMINI_PROPOSAL.md` — proposal only; no Gemini implementation.
+- `knowledge_base/` — approved KB01–KB05 scientific content (read-only) and the structured
+  KB06 weekly-follow-up source.
+- `backend/assets/fonts/` — packaged Tajawal font and its SIL OFL redistribution license.
 
-## Planned stack
+## Secrets and generated data
 
-Flutter, Riverpod, GoRouter, FastAPI, SQLAlchemy, SQLite, external LLM API, RAG, pytest, and Flutter tests.
-
-## Knowledge-base inventory
-
-- KB01: age-based language milestones
-- KB02: home activities
-- KB03: decision rules
-- KB04: report templates
-- KB05: assessment questions
-
-The supplied normalized dataset currently contains 591 records.
-
-## Start with Claude Code
-
-1. Create a private GitHub repository.
-2. Upload this package without adding API keys or personal child data.
-3. Clone the repository locally.
-4. Open a terminal in the repository root.
-5. Start Claude Code.
-6. Tell Claude Code: `Read CLAUDE.md and execute CLAUDE_CODE_PROMPT.md.`
-
-## Local environment files
-
-Copy examples rather than editing tracked files:
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-Never commit `.env`, SQLite database files, generated PDFs, or user uploads.
+Never commit `.env` files, API keys, tokens, passwords, SQLite databases, generated PDFs,
+`node_modules`, build output, logs, screenshots, traces, videos, Playwright artifacts, or
+temporary files. Use example environment files as templates and keep real values local.

@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test } from "@playwright/test";
 
 import { addChild, completeAssessment, loginExistingParent, SHARED_PARENT_EMAIL } from "./helpers";
@@ -39,7 +41,20 @@ test("no diagnostic medical claim appears on the generated report page", async (
 
   // The report must carry the non-diagnostic disclaimer somewhere on the page.
   await expect(page.getByText(/لا يغني عن التقييم أو العلاج من قبل أخصائي تخاطب مؤهل/)).toBeVisible();
+  await expect(
+    page.getByText("المتابعة: إعادة التقييم بعد أسبوع وتحديث الخطة"),
+  ).toBeVisible();
 
   const bodyText = await page.locator("body").innerText();
   assertNoUnnegatedDiagnosisClaim(bodyText);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "تحميل PDF" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^REP-\d+\.pdf$/);
+  const downloadPath = await download.path();
+  expect(downloadPath).toBeTruthy();
+  const pdf = await readFile(downloadPath as string);
+  expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(pdf.includes(Buffer.from("/FontFile2"))).toBe(true);
 });

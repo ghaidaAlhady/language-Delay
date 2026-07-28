@@ -1,5 +1,7 @@
-import { useParams } from "react-router-dom";
+import { useRef } from "react";
+import { Link, useParams } from "react-router-dom";
 
+import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
@@ -22,6 +24,7 @@ export function WeeklyPlanPage() {
   const planQuery = useActiveWeeklyPlan(childId);
   const setCompletion = useSetActivityCompletion(childId ?? "");
   const requestAlternative = useRequestAlternativeActivity(childId ?? "");
+  const completionInFlightRef = useRef(new Set<string>());
 
   if (planQuery.isPending) return <SkeletonCard />;
 
@@ -52,9 +55,14 @@ export function WeeklyPlanPage() {
   const days = [...activitiesByDay.keys()].sort((a, b) => dayIndex(a) - dayIndex(b));
 
   function handleToggle(activitySlotId: string, completed: boolean): void {
+    if (completionInFlightRef.current.has(activitySlotId)) return;
+    completionInFlightRef.current.add(activitySlotId);
     setCompletion.mutate(
       { activitySlotId, completed: !completed },
-      { onError: (error) => showToast(getArabicErrorMessage(error), "error") },
+      {
+        onError: (error) => showToast(getArabicErrorMessage(error), "error"),
+        onSettled: () => completionInFlightRef.current.delete(activitySlotId),
+      },
     );
   }
 
@@ -79,6 +87,26 @@ export function WeeklyPlanPage() {
           label={`الإنجاز — ${plan.completed_count} من ${plan.total_activities}`}
         />
       </Card>
+
+      {plan.is_active &&
+        plan.total_activities > 0 &&
+        plan.completed_count === plan.total_activities && (
+          <Card className="border-2 border-success-500 bg-success-50 text-center">
+            <h2 className="text-xl font-bold text-primary-900">
+              أكملتم الخطة الأسبوعية
+            </h2>
+            <p className="mt-2 text-gray-700">
+              حان وقت تقييم تقدم الطفل وإنشاء خطة الأسبوع القادم.
+            </p>
+            <div className="mt-4">
+              <Link
+                to={`/children/${plan.child_id}/reassessment?planId=${encodeURIComponent(plan.id)}`}
+              >
+                <Button size="lg">ابدأ المتابعة الأسبوعية</Button>
+              </Link>
+            </div>
+          </Card>
+        )}
 
       {days.length === 0 && <EmptyState title="لا توجد أنشطة في هذه الخطة." />}
 

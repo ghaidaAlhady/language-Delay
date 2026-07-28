@@ -33,11 +33,9 @@ class Settings(BaseSettings):
     default_language: str = "ar"
     log_level: str = "INFO"
 
-    #: Path to a Unicode TTF font with Arabic glyph coverage (e.g. Amiri,
-    #: Noto Naskh Arabic), supplied by the deployment environment. No font
-    #: file is committed to this repository (licensing); without one, PDF
-    #: generation still produces a real file but Arabic text will not render
-    #: legibly. See docs/DECISIONS_AND_ASSUMPTIONS.md.
+    #: Optional override for the packaged open-licensed Tajawal TTF. The
+    #: packaged font is used by default so Arabic PDFs work on another
+    #: machine without relying on a private/system font.
     pdf_arabic_font_path: str = ""
 
     @property

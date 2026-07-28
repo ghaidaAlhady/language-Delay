@@ -10,9 +10,9 @@ touched.
       error envelope, versioned router, CORS, request-logging middleware, rate limiting.
 
 ### Knowledge base
-- [x] Direct `.xlsx` loading + structural validation for KB01–KB05, typed normalization,
-      indexed repository, activity-ID range parser, score-band parser. Validated against the
-      real supplied files.
+- [x] Direct `.xlsx` loading + structural validation for KB01–KB05 plus structured JSON
+      loading for KB06, typed normalization, indexed repository, activity-ID range parser,
+      and score-band parser. Validated against the real supplied files.
 - [x] **Data-integrity issue found and reported**: KB01/KB05 milestone-ID scheme mismatch for
       ages 3–5 (see `DECISIONS_AND_ASSUMPTIONS.md`). Backend degrades gracefully per
       user-approved direction; KB files were not modified.
@@ -32,7 +32,7 @@ touched.
 
 ### Reports
 - [x] Deterministic Arabic report generation (KB04-grounded), idempotent generation, list/
-      detail retrieval, Arabic-shaped PDF export.
+      detail retrieval, and Arabic-shaped PDF export with an embedded packaged Tajawal font.
 - [ ] English report generation — deferred; KB04 templates are Arabic-only, and translating
       them would mean inventing content not in the supplied KB (see
       `DECISIONS_AND_ASSUMPTIONS.md`).
@@ -42,8 +42,9 @@ touched.
       alternative-activity suggestion.
 
 ### Follow-up / reassessment
-- [x] Progress comparison against the previous assessment, KB04-grounded narrative,
-      automatic weekly-plan regeneration, idempotent.
+- [x] Plan-linked 5–8-question KB06 selection, persisted answer/question context,
+      deterministic non-diagnostic weekly progress, ownership isolation, idempotent
+      submission, and automatic replacement-plan generation. KB05 is not reused.
 
 ### Activities & references
 - [x] Age/domain browse, assessment-scoped recommended-activity resolution, KB01 reference
