@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { AiAssistanceCard } from "@/components/AiAssistanceCard";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { ErrorState } from "@/components/ErrorState";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { SkeletonCard } from "@/components/Skeleton";
+import { useAssessmentAssistance } from "@/features/ai/useAiAssistance";
 import { useAssessment } from "@/features/assessment/useAssessments";
 import { useGenerateReport } from "@/features/reports/useReports";
 import { useGenerateWeeklyPlan } from "@/features/weeklyPlan/useWeeklyPlan";
@@ -16,6 +18,10 @@ export function AssessmentResultPage() {
   const { assessmentId } = useParams<{ assessmentId: string }>();
   const navigate = useNavigate();
   const assessmentQuery = useAssessment(assessmentId);
+  const assistanceQuery = useAssessmentAssistance(
+    assessmentId,
+    assessmentQuery.data?.status === "completed",
+  );
   const childId = assessmentQuery.data?.child_id;
   const generateReport = useGenerateReport();
   const generateWeeklyPlan = useGenerateWeeklyPlan(childId ?? "");
@@ -126,6 +132,14 @@ export function AssessmentResultPage() {
           ))}
         </div>
       </Card>
+
+      <AiAssistanceCard
+        heading="شرح مبسط للنتيجة"
+        data={assistanceQuery.data}
+        isPending={assistanceQuery.isPending}
+        isError={assistanceQuery.isError}
+        onRetry={() => void assistanceQuery.refetch()}
+      />
 
       {(generateReport.isError || generateWeeklyPlan.isError) && (
         <p role="alert" className="text-center text-sm text-danger-600">

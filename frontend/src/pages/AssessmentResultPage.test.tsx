@@ -33,4 +33,20 @@ describe("AssessmentResultPage", () => {
     expect(screen.getByRole("button", { name: "إنشاء الخطة الأسبوعية" })).toBeInTheDocument();
   });
 
+  it("adds the optional explanation without replacing deterministic results", async () => {
+    renderWithProviders(<AssessmentResultPage />, {
+      authenticated: true,
+      path: "/assessments/:assessmentId/result",
+      initialEntry: "/assessments/assessment-1/result",
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "شرح مبسط للنتيجة" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("صياغة مساندة بالذكاء الاصطناعي"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("طبيعي").length).toBeGreaterThan(0);
+  });
+
 });

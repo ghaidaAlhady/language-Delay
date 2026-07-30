@@ -129,3 +129,41 @@ improved/support-needed domains, a non-diagnostic comment, and the next goal.
 Google Sign-In, chatbot, privacy/terms acknowledgment endpoints — see
 `docs/DECISIONS_AND_ASSUMPTIONS.md` and `docs/IMPLEMENTATION_STATUS.md` for why and what's
 needed to add them.
+
+## Optional AI-assisted wording (Milestone 2)
+
+All routes require the normal bearer token, apply masked ownership checks (`404` for missing
+or foreign resources), and are rate-limited to 20 requests/minute per remote address.
+Clients send no facts in the body.
+
+| Method | Path | Authoritative resource |
+|---|---|---|
+| POST | `/api/v1/assessments/{assessment_id}/ai-explanation` | Completed assessment |
+| POST | `/api/v1/weekly-plans/{weekly_plan_id}/ai-summary` | Existing weekly plan |
+| POST | `/api/v1/followups/{followup_id}/ai-summary` | Existing follow-up |
+
+Successful provider wording and all provider/configuration fallback paths return HTTP 200:
+
+```json
+{
+  "content": {
+    "title": "string",
+    "summary": "string",
+    "encouragement": "string",
+    "action_tips": [
+      {"text": "string", "source_id": "A001"}
+    ],
+    "disclaimer": "exact fixed Arabic disclaimer",
+    "source_ids": ["A001"]
+  },
+  "generation_source": "gemini",
+  "fallback_reason": null,
+  "prompt_version": "v1"
+}
+```
+
+`generation_source` is `gemini` or `deterministic_fallback`. Fallback reasons are
+`disabled`, `not_configured`, `empty_context`, `timeout`, `provider_error`,
+`invalid_output`, `unsafe_output`, or `ungrounded_output`. Provider error text is never
+returned. Authentication, ownership, invalid resource state, request validation, and rate
+limit errors keep their normal HTTP semantics.

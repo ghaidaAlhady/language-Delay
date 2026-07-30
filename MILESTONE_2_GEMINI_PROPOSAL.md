@@ -1,7 +1,9 @@
 # Milestone 2 Gemini Proposal
 
-Status: proposal only. No Gemini model, package, API key, or integration code has been
-selected or added.
+Status: approved and implemented on 2026-07-28. This file preserves the reviewed proposal;
+the implementation record is `MILESTONE_2_GEMINI_IMPLEMENTATION_REPORT.md`. The official
+`google-genai` package is declared, but no API key or model is committed and the feature
+remains disabled by default.
 
 ## Proposed role
 

@@ -95,10 +95,34 @@ data. The one place a *partial* failure is tolerated is the known KB01/KB05 mile
 strengths/support-needs list can fail without aborting the whole scoring pipeline, since that
 list is presentational, not a scored decision.
 
-## Guardrails against prompt injection / unsafe generation
+## Milestone 2 assisted-wording retrieval and guardrails
 
-Not directly applicable this session — no free-text user input is ever interpolated into a
-generated response (assessment answers are a closed 5-value enum; child profile fields like
-`notes` are stored but never fed into any generation path). This becomes relevant once the
-chatbot (deferred, see `IMPLEMENTATION_STATUS.md`) is built, since it will accept free-text
-user messages that do need a domain-classifier guard before generation.
+The three assistance operations never accept client-authored facts or free text. Context is
+rebuilt server-side after authentication and ownership checks:
+
+- assessment explanation: age band, stored deterministic result, strengths/support needs,
+  KB03 decision-rule excerpts, and approved KB02 activities;
+- weekly-plan summary: age band, deterministic completion/adherence values, goals, and only
+  activities already present in the plan;
+- follow-up summary: deterministic progress/domains/comment/next goal and sanitized KB06
+  question plus KB02 activity sources stored with the follow-up.
+
+Names, emails, user/child/resource IDs, tokens, answers, answer history, notes, medical
+history, raw ORM objects, and raw database rows are excluded by construction. Source IDs
+such as `A001` and approved KB excerpts are allowed because they provide traceability.
+
+Prompt v1 separates immutable facts from approved grounding records and prohibits new
+scoring, severity, referral, eligibility, activities, goals, diagnosis, medication, or
+treatment. The official provider structured-output schema is validated again by Pydantic.
+Application validators then require:
+
+- the exact fixed disclaimer;
+- no extra JSON fields, HTML, code fences, URLs, diagnostic/treatment wording, or invented
+  percentages;
+- cited IDs to be a subset of approved context;
+- every action tip to cite a real KB02 activity and contain its exact name;
+- no contradiction of deterministic severity, referral, or progress.
+
+Any violation uses the deterministic fallback and records only safe operational metadata.
+There is still no chatbot, autonomous agent, embedding store, or free-text prompt-injection
+surface in this milestone.

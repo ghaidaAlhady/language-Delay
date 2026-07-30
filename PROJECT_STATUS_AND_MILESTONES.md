@@ -1,12 +1,12 @@
 # Project Status and Milestones
 
-Authoritative update: 2026-07-26
+Authoritative update: 2026-07-28
 
 Repository: `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
 
 Branch: `feature/web-frontend`
 
-Latest commit at verification start: `638b324ccd9b52ee424d1d584bd4c1580b96c134`
+Latest commit at verification start: `bbb896264ea35378086a825769725f9c0ae6cedd`
 
 ## Current status
 
@@ -14,13 +14,11 @@ The FastAPI backend and Arabic-first React web frontend implement the approved M
 journey: authentication, child profiles, assessment, deterministic results and reports,
 weekly plans, weekly follow-up, progress comparison, PDF export, and persisted data.
 
-The project is in Milestone 1 final stabilization. Checkpoint 4 implementation and
-documentation work is complete locally and awaiting review. Milestone 1 is not formally
-accepted because the repository's final gate—27/27 Desktop/Chromium E2E tests in two
-consecutive clean isolated runs—has not yet been demonstrated.
-
-No Gemini integration is implemented. `MILESTONE_2_GEMINI_PROPOSAL.md` is documentation
-only.
+Milestone 1 stabilization and its focused corrections are present at the current `HEAD`.
+Milestone 2 optional Gemini-assisted wording is implemented in the working tree and has
+completed backend, frontend, and focused fake-provider verification. It is not committed or
+staged. The earlier Milestone 1 final gate—27/27 Desktop/Chromium E2E tests in two
+consecutive clean isolated runs—has still not been demonstrated.
 
 ## Milestone 1 checkpoints
 
@@ -36,21 +34,20 @@ only.
 
 | Verification | Result |
 |---|---|
-| Backend tests | 168/168 passed across bounded groups; see environment caveat below. |
-| Frontend tests | 107/107 passed in 22 files. |
+| Backend tests | 203 passed and 1 opt-in live test skipped across bounded groups; see environment caveat below. |
+| Frontend tests | 117/117 passed in 24 files. |
 | Frontend type-check | Passed. |
 | Frontend lint | Passed with one pre-existing warning at `src/tests/test-utils.tsx:58`. |
 | Frontend production build | Passed. |
-| Critical Desktop E2E flows | Passed across focused run and individual reruns. |
+| Focused fake-provider Gemini E2E | 1/1 passed, covering three assisted surfaces and deterministic timeout fallback. |
+| Critical Desktop E2E flows | All passed across a 4/5 combined run and isolated login-flake retry. |
 | Weekly follow-up Case 10 | Passed in Checkpoint 4; Checkpoint 3 recorded 5/5 focused runs. |
 | Focused offline E2E | Passed after a narrow create-child mutation fix. |
-| Full Desktop/Chromium E2E | 26/27 passed; sole transient login connection failure passed individually. |
-| Second full Desktop run | Not run because the first result and Windows environment were not stable enough to make it trustworthy. |
+| Full Desktop/Chromium E2E | Not rerun for Milestone 2 because the critical run reproduced known login flakiness; the latest pre-Milestone-2 record remains 26/27 with its sole login failure passing alone. |
 
-The backend virtual environment has corrupted cached pandas bytecode and intermittent
-long-process hangs. All 168 collected tests passed when executed in bounded groups with a
-task-local bytecode-cache prefix; no backend application failure was found. This
-environment should be recreated or repaired in a separately approved maintenance task.
+The Windows backend runner has intermittent long-process hangs. All 204 collected nodes
+completed in bounded groups: 203 passed and the explicitly opt-in live test skipped. No
+backend assertion failure was found.
 
 ## Checkpoint 4 defect classification
 
@@ -91,17 +88,23 @@ backlog.
 
 ## Exact next action
 
-Review the Checkpoint 4 changes. In a fresh Windows session with a healthy recreated Python
-virtual environment, verify ports 4173 and 8001 are free, then run the complete
-Desktop/Chromium E2E project twice consecutively with retries disabled and a freshly
-created isolated E2E database for each run. If both runs are 27/27, update the reports to
-mark Milestone 1 accepted.
+Review the unstaged Milestone 2 implementation, this status file,
+`MILESTONE_2_GEMINI_IMPLEMENTATION_REPORT.md`, and the latest `PROGRESS.md` handoff. If
+approved, stage only the documented Milestone 2 paths and keep all local settings, secrets,
+databases, and generated artifacts excluded. A future Milestone 1 acceptance session may
+still run Desktop Chromium twice from fresh isolated E2E databases; do not use the
+development database for that gate.
 
-Do not reset or use the development database for this gate.
+## Milestone 2 — Safe Gemini-assisted explanations
 
-## Next milestone
+Milestone 2 was explicitly approved and implemented on `feature/web-frontend` on
+2026-07-28. It adds optional server-side wording assistance for a completed assessment,
+existing weekly plan, and completed weekly follow-up.
 
-After Milestone 1 acceptance and explicit user approval, the next milestone is Milestone 2:
-review and refine the safe Gemini-assistance proposal. Milestone 2 is not implemented and
-must not begin automatically. Manual frontend testing may proceed before that gate using
-`MANUAL_FRONTEND_TESTING_GUIDE.md`.
+The milestone does not add a chatbot or autonomous agent and does not alter deterministic
+assessment scoring, severity, referral, eligibility, KB activities, weekly-plan generation,
+or follow-up calculations. Provider calls are disabled by default, privacy-minimized,
+strictly validated, and fail to deterministic Arabic wording.
+
+See `MILESTONE_2_GEMINI_IMPLEMENTATION_REPORT.md` and the latest `PROGRESS.md` handoff for
+the exact verification/commit state. Do not start another milestone automatically.

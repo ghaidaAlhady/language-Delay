@@ -186,6 +186,33 @@ an unconfigured origin is not; wildcard-with-credentials is asserted absent).
   metadata-filtered lookup (age, domain, ID), not embedding similarity search. No LLM
   provider is configured by default; report generation is fully deterministic/KB-grounded
   (see `RAG_AI_DESIGN.md`).
-- LLM provider/model selection: `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY` env vars exist
-  as configuration surface for a future LLM-assisted layer (e.g. chatbot), but nothing in
-  this session's scope calls out to one.
+- The generic `LLM_*` configuration remains for backward compatibility. Milestone 2 uses
+  explicit `GEMINI_*` settings for three wording-only operations; it does not add a chatbot.
+
+## Milestone 2 decisions — safe Gemini assistance
+
+1. **Deterministic output remains authoritative.** The model receives completed decisions
+   and approved KB context only; it cannot participate in scoring, severity/referral,
+   eligibility, activity/goal/plan selection, or follow-up calculation.
+2. **No generated-text persistence.** Assisted wording is optional presentation content.
+   Avoiding storage removes migration, staleness, and sensitive-retention concerns.
+3. **Provider-neutral core, Gemini adapter at the edge.** Orchestration depends on
+   `AIProvider`; only `providers/gemini.py` imports the official SDK. The import is lazy so
+   default-disabled deployments start safely before optional dependencies are installed.
+4. **Disabled by default; model is operator-selected.** An empty model is treated as not
+   configured. The repository documents `gemini-2.5-flash` as a verified stable structured-
+   output example but does not hardcode a model.
+5. **Provider failures are product-success fallbacks.** Timeouts, provider errors, malformed
+   JSON, unsafe language, or ungrounded sources return HTTP 200 deterministic wording.
+   Authentication, ownership, resource state, validation, and rate limits are not hidden.
+6. **Structured JSON is necessary but insufficient.** Pydantic forbids extra fields, then
+   application validators enforce the exact disclaimer, safety language, source subset,
+   KB02 activity ID/name binding, and immutable fact consistency.
+7. **Privacy by construction.** Context builders manually copy allowed fields instead of
+   serializing ORM/API objects. This prevents names, emails, resource IDs, answers, notes,
+   medical history, and secrets from entering prompts.
+8. **E2E fake is environment-gated.** `AI_TEST_PROVIDER=fake` works only with
+   `APP_ENV=e2e`; production silently follows normal disabled/configured provider selection.
+9. **No retry loop in application orchestration.** Retry count and timeout belong to the
+   official provider HTTP configuration. The orchestration performs one logical generation
+   and then falls back, avoiding duplicate uncontrolled calls.

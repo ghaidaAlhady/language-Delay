@@ -53,7 +53,11 @@ export default defineConfig({
           url: `${E2E_BACKEND_URL}/health`,
           reuseExistingServer: false,
           timeout: 60_000,
-          env: { CORS_ORIGINS: JSON.stringify([E2E_FRONTEND_URL]) },
+          env: {
+            CORS_ORIGINS: JSON.stringify([E2E_FRONTEND_URL]),
+            APP_ENV: "e2e",
+            AI_TEST_PROVIDER: "fake",
+          },
         },
         {
           // Launch Vite directly. On Windows, Playwright's web-server wrapper can

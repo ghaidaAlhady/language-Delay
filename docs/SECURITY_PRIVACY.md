@@ -49,8 +49,9 @@ A breach returns `429` via the same JSON error envelope as every other error.
   free-text answers never reach the logs even indirectly.
 - `_redact_sensitive` (`app/core/logging.py`) redacts any log field literally named
   `password`, `hashed_password`, `access_token`, `refresh_token`, `token`, `authorization`,
-  `secret_key`, `llm_api_key`, `answer_text`, `message`, `report_text`, or `notes`, as a
-  defense-in-depth backstop even if a future call site logs one of these by mistake.
+  `secret_key`, `llm_api_key`, `gemini_api_key`, `prompt`, `raw_prompt`, `raw_response`,
+  `provider_response`, `ai_context`, `answer_text`, `message`, `report_text`, or `notes`,
+  as a defense-in-depth backstop even if a future call site logs one of these by mistake.
 - Unhandled exceptions are logged server-side with `exc_info` but returned to the client as a
   generic `"An unexpected error occurred."` — stack traces never leak.
 
@@ -102,3 +103,26 @@ that no report field, and none of the five KB04 narrative templates, contains th
 - Privacy policy / terms-of-use version acknowledgment endpoints.
 - A secrets scan / dependency vulnerability scan step in CI (no GitHub Actions workflow was
   added this session — see `IMPLEMENTATION_STATUS.md`).
+
+## Gemini-assisted wording privacy boundary (Milestone 2)
+
+- Disabled by default; a call is possible only when the enable flag, server-side API key,
+  and model are all configured.
+- Provider configuration is backend-only. No SDK, API key, prompt, or raw provider response
+  is shipped to browser code.
+- Ownership is checked before context construction. Foreign and nonexistent resources are
+  both `404`, and the provider is not called.
+- Context builders whitelist only age band, deterministic output, approved goals/progress,
+  and KB source IDs/excerpts. Names, emails, user/child/resource IDs, tokens, full answer
+  history, notes, medical history, and secrets are never included.
+- The request logger now emits the FastAPI route template rather than the concrete URL path,
+  adds an opaque correlation ID and `X-Request-ID`, and never logs query/body/header data.
+- AI orchestration logs only correlation ID, operation, prompt version, provider label,
+  latency, outcome, source/tip counts, and normalized fallback reason. Prompts, context,
+  responses, provider exception details, generated health wording, PII, and resource IDs are
+  prohibited and protected by global redaction keys.
+- Strict structured output is validated for schema, exact disclaimer, unsafe language,
+  external URLs/markup, KB grounding, exact activity name/source binding, and contradiction
+  of immutable severity/referral/progress facts.
+- Provider failure is fail-closed to deterministic wording and never changes the underlying
+  resource.

@@ -47,7 +47,10 @@ mypy app
 | Follow-up (service + API) | `test_followup_service.py`, `test_followups_api.py` | Requires the exact owned, active, fully completed weekly plan; deterministic 5–8-question KB06 selection and same-domain fallback; rejects missing/unknown answers and stale/wrong plans; never reuses KB05; persists context; auto plan replacement; idempotency; ownership isolation |
 | Cross-cutting | `test_non_diagnostic.py`, `test_traceability.py` | Disclaimer present verbatim on every report; no diagnostic language anywhere in generated output or KB04 templates; every ID the API returns resolves to a real KB row with matching text |
 
-**158 tests, all passing** as of the end of this session (`pytest -q`).
+This table records the original backend coverage layers. The current Milestone 2 collection
+contains 204 nodes: **203 passed and 1 explicitly opt-in live Gemini test skipped** in
+completed bounded runs. See `PROGRESS.md` and
+`MILESTONE_2_GEMINI_IMPLEMENTATION_REPORT.md` for the exact current record.
 
 ## Explicit requirement checklist
 
@@ -67,3 +70,43 @@ mypy app
 - Flutter widget/integration tests (no mobile app yet).
 - A CI workflow to run this suite automatically on push (no `.github/workflows/` file was
   added — `PACKAGE_MANIFEST.txt`/repo root has no existing CI config to extend).
+
+## Milestone 2 AI-assistance coverage
+
+Backend focused scenarios cover:
+
+- default-disabled and incomplete-configuration behavior;
+- production rejection of the E2E fake provider;
+- strict valid JSON and malformed/extra-field rejection;
+- exact disclaimer enforcement;
+- diagnostic, medication, treatment, URL, HTML, and code-fence rejection;
+- unknown/duplicate sources, unsupported tips, missing exact activity names, and invented
+  activity IDs;
+- severity, referral, progress, and percentage contradictions;
+- deterministic fallback grounding;
+- authentication on all three endpoints;
+- ownership masking on assessment, plan, and follow-up before provider invocation;
+- provider timeout, generic failure, malformed JSON, unsafe output, and ungrounded output
+  returning HTTP 200 fallback;
+- resource-state validation, rate limiting, correlation header, PII/resource-ID exclusion,
+  no answer-history/notes context, and unchanged authoritative assessment data.
+
+Frontend tests cover loading, Gemini, deterministic fallback, retryable fallback, disabled
+fallback, network error/retry, and integration on all three existing pages while their
+deterministic content remains visible. Playwright uses `APP_ENV=e2e` plus
+`AI_TEST_PROVIDER=fake`; production ignores that provider selection. The focused journey
+exercises three valid provider surfaces and a deliberate timeout fallback without a real
+key.
+
+`backend/tests/test_live_gemini.py` is opt-in only:
+
+```powershell
+$env:RUN_LIVE_GEMINI_TEST = "1"
+$env:GEMINI_API_KEY = "<local secret>"
+$env:GEMINI_MODEL = "gemini-2.5-flash"
+Set-Location .\backend
+.\.venv\Scripts\python.exe -m pytest -q -s tests/test_live_gemini.py
+```
+
+It skips unless explicitly enabled and configured, and never prints the key, prompt, or
+provider output. Final suite counts are recorded in `PROGRESS.md` and the milestone report.

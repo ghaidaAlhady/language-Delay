@@ -73,3 +73,27 @@ Both are documented in full in `DECISIONS_AND_ASSUMPTIONS.md`.
 See `IMPLEMENTATION_STATUS.md` for the complete list — chatbot, Google Sign-In, Flutter
 mobile app, CI workflow, PRD.md/SRS.md (product-level docs; `PROJECT_SPEC.md` already serves
 as the approved spec this session worked from).
+
+## Milestone 2 — Safe Gemini-assisted wording
+
+This later approved milestone extends the shipped React/FastAPI product; the backend-only
+scope above is historical.
+
+1. Add disabled-by-default typed Gemini settings and the official `google-genai`
+   dependency.
+2. Build provider-neutral contracts, three versioned prompt templates, an official async
+   Gemini adapter, a production-disabled provider, and an E2E-only fake.
+3. Build ownership-first, field-whitelisted context for completed assessments, existing
+   weekly plans, and completed follow-ups.
+4. Validate structured JSON, exact disclaimer, unsafe wording, URLs/markup, KB sources,
+   activity names, and immutable deterministic facts.
+5. Return useful deterministic Arabic fallback content for disabled/configuration/provider/
+   validation failures without changing normal HTTP semantics for auth or resource errors.
+6. Add three additive POST routes, request correlation, route-template logs, and rate
+   limits. No database migration or generated-text persistence.
+7. Add optional RTL assistance cards to the existing React result, plan, and follow-up
+   pages. No browser provider SDK or key.
+8. Add backend unit/API/privacy/fallback tests, frontend state/page tests, an isolated E2E
+   fake-provider journey, and an opt-in live smoke test.
+9. Update architecture, API, RAG, privacy, test, status, handoff, and operator
+   documentation.

@@ -280,3 +280,38 @@ export interface FollowupResponse {
   next_goal: string;
   created_at: string;
 }
+
+// ---- Optional server-side assisted wording ---------------------------------
+
+export type AIGenerationSource = "gemini" | "deterministic_fallback";
+
+export type AIFallbackReason =
+  | "disabled"
+  | "not_configured"
+  | "empty_context"
+  | "timeout"
+  | "provider_error"
+  | "invalid_output"
+  | "unsafe_output"
+  | "ungrounded_output";
+
+export interface AIActionTip {
+  text: string;
+  source_id: string;
+}
+
+export interface AIAssistanceContent {
+  title: string;
+  summary: string;
+  encouragement: string;
+  action_tips: AIActionTip[];
+  disclaimer: string;
+  source_ids: string[];
+}
+
+export interface AIAssistanceResponse {
+  content: AIAssistanceContent;
+  generation_source: AIGenerationSource;
+  fallback_reason: AIFallbackReason | null;
+  prompt_version: string;
+}

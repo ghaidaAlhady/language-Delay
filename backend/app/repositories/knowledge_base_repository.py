@@ -51,6 +51,9 @@ class KnowledgeBaseRepository:
 
     _milestones_by_id: dict[str, MilestoneRecord] = field(init=False, default_factory=dict)
     _activities_by_id: dict[str, ActivityRecord] = field(init=False, default_factory=dict)
+    _decision_rules_by_id: dict[str, DecisionRuleRecord] = field(
+        init=False, default_factory=dict
+    )
     _questions_by_age: dict[int, list[QuestionRecord]] = field(init=False, default_factory=dict)
     _activities_by_age_domain: dict[tuple[int, Domain], list[ActivityRecord]] = field(
         init=False, default_factory=dict
@@ -69,6 +72,7 @@ class KnowledgeBaseRepository:
     def __post_init__(self) -> None:
         self._milestones_by_id = {m.id: m for m in self.kb.milestones}
         self._activities_by_id = {a.id: a for a in self.kb.activities}
+        self._decision_rules_by_id = {r.id: r for r in self.kb.decision_rules}
         self._reference_by_code = {r.code: r for r in self.kb.references}
         self._weekly_followup_questions = sorted(
             (q for q in self.kb.weekly_followup_questions if q.active),
@@ -155,6 +159,14 @@ class KnowledgeBaseRepository:
         return [a for a in self.kb.activities if a.age == age]
 
     # -- Decision rules (KB03) ------------------------------------------------
+
+    def get_decision_rule_by_id(self, rule_id: str) -> DecisionRuleRecord:
+        try:
+            return self._decision_rules_by_id[rule_id]
+        except KeyError as exc:
+            raise KnowledgeBaseLookupError(
+                f"Unknown decision rule ID: {rule_id!r}"
+            ) from exc
 
     def _find_band(self, age: int, domain: Domain, score_percent: float) -> _DecisionRuleBand:
         bands = self._decision_bands.get((age, domain))

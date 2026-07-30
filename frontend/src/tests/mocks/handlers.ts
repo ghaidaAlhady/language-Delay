@@ -7,8 +7,10 @@
 import { HttpResponse, http } from "msw";
 
 import {
+  fixtureAIAssistance,
   fixtureAssessmentCompleted,
   fixtureChild,
+  fixtureFollowup,
   fixtureQuestions,
   fixtureReport,
   fixtureUser,
@@ -38,12 +40,24 @@ export const handlers = [
   ),
   http.get(`${BASE}/api/v1/assessments/:assessmentId`, () => HttpResponse.json(fixtureAssessmentCompleted)),
   http.get(`${BASE}/api/v1/assessments/:assessmentId/questions`, () => HttpResponse.json(fixtureQuestions)),
+  http.post(`${BASE}/api/v1/assessments/:assessmentId/ai-explanation`, () =>
+    HttpResponse.json(fixtureAIAssistance),
+  ),
 
   http.get(`${BASE}/api/v1/children/:childId/reports`, () => HttpResponse.json([fixtureReport])),
   http.get(`${BASE}/api/v1/reports/:reportId`, () => HttpResponse.json(fixtureReport)),
 
   http.get(`${BASE}/api/v1/children/:childId/weekly-plan`, () => HttpResponse.json(fixtureWeeklyPlan)),
+  http.post(`${BASE}/api/v1/weekly-plans/:planId/ai-summary`, () =>
+    HttpResponse.json(fixtureAIAssistance),
+  ),
   http.get(`${BASE}/api/v1/weekly-plans/:planId/followup-questions`, () =>
     HttpResponse.json(fixtureWeeklyFollowupContext),
+  ),
+  http.get(`${BASE}/api/v1/followups/:followupId`, () =>
+    HttpResponse.json(fixtureFollowup),
+  ),
+  http.post(`${BASE}/api/v1/followups/:followupId/ai-summary`, () =>
+    HttpResponse.json(fixtureAIAssistance),
   ),
 ];

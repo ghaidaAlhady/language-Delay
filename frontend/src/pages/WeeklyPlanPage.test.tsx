@@ -177,4 +177,20 @@ describe("WeeklyPlanPage", () => {
       await screen.findByText("تم استبدال النشاط بنشاط بديل."),
     ).toBeInTheDocument();
   });
+
+  it("adds the optional summary without replacing plan activities", async () => {
+    renderWithProviders(<WeeklyPlanPage />, {
+      authenticated: true,
+      path: "/children/:childId/weekly-plan",
+      initialEntry: "/children/child-1/weekly-plan",
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "ملخص الخطة الأسبوعية" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("صياغة مساندة بالذكاء الاصطناعي"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("تنفيذ التعليمات البسيطة")).toBeInTheDocument();
+  });
 });

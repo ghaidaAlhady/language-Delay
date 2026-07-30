@@ -1,6 +1,8 @@
 import { useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { ApiError } from "@/api/ApiError";
+import { AiAssistanceCard } from "@/components/AiAssistanceCard";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
@@ -8,13 +10,13 @@ import { ErrorState } from "@/components/ErrorState";
 import { ProgressBar } from "@/components/ProgressBar";
 import { SkeletonCard } from "@/components/Skeleton";
 import { useToast } from "@/components/ToastContext";
+import { useWeeklyPlanAssistance } from "@/features/ai/useAiAssistance";
 import {
   useActiveWeeklyPlan,
   useRequestAlternativeActivity,
   useSetActivityCompletion,
 } from "@/features/weeklyPlan/useWeeklyPlan";
 import { WeeklyActivityCard } from "@/features/weeklyPlan/WeeklyActivityCard";
-import { ApiError } from "@/api/ApiError";
 import { getArabicErrorMessage } from "@/utils/errorMessages";
 import { dayIndex } from "@/utils/weekDays";
 
@@ -22,6 +24,10 @@ export function WeeklyPlanPage() {
   const { childId } = useParams<{ childId: string }>();
   const { showToast } = useToast();
   const planQuery = useActiveWeeklyPlan(childId);
+  const assistanceQuery = useWeeklyPlanAssistance(
+    planQuery.data?.id,
+    Boolean(planQuery.data),
+  );
   const setCompletion = useSetActivityCompletion(childId ?? "");
   const requestAlternative = useRequestAlternativeActivity(childId ?? "");
   const completionInFlightRef = useRef(new Set<string>());
@@ -87,6 +93,14 @@ export function WeeklyPlanPage() {
           label={`الإنجاز — ${plan.completed_count} من ${plan.total_activities}`}
         />
       </Card>
+
+      <AiAssistanceCard
+        heading="ملخص الخطة الأسبوعية"
+        data={assistanceQuery.data}
+        isPending={assistanceQuery.isPending}
+        isError={assistanceQuery.isError}
+        onRetry={() => void assistanceQuery.refetch()}
+      />
 
       {plan.is_active &&
         plan.total_activities > 0 &&

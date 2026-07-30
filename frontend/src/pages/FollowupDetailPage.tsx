@@ -1,9 +1,11 @@
 import { Link, useParams } from "react-router-dom";
 
+import { AiAssistanceCard } from "@/components/AiAssistanceCard";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { ErrorState } from "@/components/ErrorState";
 import { SkeletonCard } from "@/components/Skeleton";
+import { useFollowupAssistance } from "@/features/ai/useAiAssistance";
 import { useFollowup } from "@/features/followup/useFollowups";
 import { getArabicErrorMessage } from "@/utils/errorMessages";
 import { formatArabicDate, formatArabicPercent } from "@/utils/formatArabic";
@@ -11,6 +13,10 @@ import { formatArabicDate, formatArabicPercent } from "@/utils/formatArabic";
 export function FollowupDetailPage() {
   const { followupId } = useParams<{ followupId: string }>();
   const followupQuery = useFollowup(followupId);
+  const assistanceQuery = useFollowupAssistance(
+    followupId,
+    Boolean(followupQuery.data),
+  );
 
   if (followupQuery.isPending) return <SkeletonCard />;
   if (followupQuery.isError) {
@@ -78,6 +84,14 @@ export function FollowupDetailPage() {
         <p className="text-sm text-gray-700">{followup.comment}</p>
         <p className="mt-3 text-sm text-gray-600">الهدف القادم: {followup.next_goal}</p>
       </Card>
+
+      <AiAssistanceCard
+        heading="ملخص تقدم الأسبوع"
+        data={assistanceQuery.data}
+        isPending={assistanceQuery.isPending}
+        isError={assistanceQuery.isError}
+        onRetry={() => void assistanceQuery.refetch()}
+      />
 
       <div className="flex justify-center">
         <Link to={`/children/${followup.child_id}/weekly-plan`}>

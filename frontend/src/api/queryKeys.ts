@@ -24,4 +24,12 @@ export const queryKeys = {
     questions: (weeklyPlanId: string) =>
       ["followups", "questions", weeklyPlanId] as const,
   },
+  aiAssistance: {
+    assessment: (assessmentId: string) =>
+      ["aiAssistance", "assessment", assessmentId] as const,
+    weeklyPlan: (weeklyPlanId: string) =>
+      ["aiAssistance", "weeklyPlan", weeklyPlanId] as const,
+    followup: (followupId: string) =>
+      ["aiAssistance", "followup", followupId] as const,
+  },
 } as const;

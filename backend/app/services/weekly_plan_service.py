@@ -110,6 +110,17 @@ class WeeklyPlanService:
             raise NotFoundError("Weekly plan not found.")
         return plan
 
+    async def get_owned(self, *, weekly_plan_id: str, user_id: str) -> WeeklyPlan:
+        plan = await weekly_plan_repository.get_by_id(
+            self.session, weekly_plan_id
+        )
+        if plan is None:
+            raise NotFoundError("Weekly plan not found.")
+        child = await child_repository.get_by_id(self.session, plan.child_id)
+        if child is None or child.user_id != user_id:
+            raise NotFoundError("Weekly plan not found.")
+        return plan
+
     async def get_active_owned(self, *, child_id: str, user_id: str) -> WeeklyPlan:
         child = await child_repository.get_by_id(self.session, child_id)
         if child is None or child.user_id != user_id:

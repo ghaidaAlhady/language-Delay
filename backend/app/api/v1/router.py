@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    ai_assistance,
     assessments,
     auth,
     children,
@@ -16,6 +17,7 @@ from app.api.v1 import (
 
 api_router = APIRouter()
 api_router.include_router(health.router)
+api_router.include_router(ai_assistance.router)
 api_router.include_router(auth.router)
 api_router.include_router(children.router)
 api_router.include_router(assessments.router)

@@ -120,3 +120,32 @@ uvicorn app.main:app --reload
 
 Then visit `http://127.0.0.1:8000/docs`. Run tests with `pytest -q` (auto-creates an isolated
 in-memory database per test; does not touch the dev SQLite file).
+
+## Current status addendum — Milestone 2
+
+The repository now includes the React web frontend and the optional server-side Gemini
+wording checkpoint. The earlier “Flutter not touched / no LLM call” statements describe the
+original backend session and are not current product status.
+
+Completed:
+
+- [x] Three ownership-scoped assistance endpoints for assessment, weekly plan, and follow-up.
+- [x] Official `google-genai` adapter behind a provider-neutral interface.
+- [x] Disabled-by-default feature flag and useful deterministic fallback for every provider
+      failure category.
+- [x] Strict Pydantic JSON contract, safety checks, KB source/activity grounding, exact
+      disclaimer, and immutable severity/referral/progress checks.
+- [x] Whitelisted privacy-minimized contexts with no parent/child identity, resource IDs,
+      answer history, notes, medical history, or secrets.
+- [x] Safe request correlation and route-template/AI operational logging.
+- [x] Optional RTL assistance sections on all three existing React pages.
+- [x] Backend, frontend, fake-provider E2E, and opt-in live-smoke test coverage.
+- [x] No migration, generated wording persistence, chatbot, autonomous agent, or change to
+      deterministic scoring/referral/activity/plan/follow-up logic.
+
+Gemini remains unavailable until an operator explicitly sets `GEMINI_ENABLED=true`,
+`GEMINI_API_KEY`, and `GEMINI_MODEL` in a local/deployment secret environment. The local
+development virtual environment used for final verification has `google-genai==1.75.0`
+installed from the declared `requirements.txt` range. The adapter constructor and async
+close path were verified without making a generation request. Deployments must still run
+`pip install -r backend/requirements.txt`; no key or model is committed.

@@ -18,3 +18,4 @@ python-bidi
 slowapi
 structlog
 email-validator
+google-genai>=1,<2

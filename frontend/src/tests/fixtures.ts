@@ -1,4 +1,5 @@
 import type {
+  AIAssistanceResponse,
   AssessmentQuestionResponse,
   AssessmentResponse,
   ChildResponse,
@@ -8,6 +9,26 @@ import type {
   WeeklyFollowupContextResponse,
   WeeklyPlanResponse,
 } from "@/types/api";
+
+export const fixtureAIAssistance: AIAssistanceResponse = {
+  content: {
+    title: "شرح مبسط",
+    summary: "هذا ملخص مبسط للحقائق الحتمية المعروضة.",
+    encouragement: "استمروا في الممارسة المنزلية المنتظمة.",
+    action_tips: [
+      {
+        text: "جرّبوا النشاط المعتمد بخطوات قصيرة.",
+        source_id: "A001",
+      },
+    ],
+    disclaimer:
+      "هذا التطبيق أداة داعمة لولي الأمر ولا يغني عن التقييم أو العلاج من قبل أخصائي تخاطب مؤهل. هذا التقرير لا يمثل تشخيصاً طبياً.",
+    source_ids: ["A001"],
+  },
+  generation_source: "gemini",
+  fallback_reason: null,
+  prompt_version: "v1",
+};
 
 export const fixtureUser: UserResponse = {
   id: "user-1",

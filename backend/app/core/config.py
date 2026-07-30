@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +28,16 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = ""
 
+    gemini_enabled: bool = False
+    gemini_api_key: SecretStr = SecretStr("")
+    gemini_model: str = ""
+    gemini_timeout_seconds: int = Field(default=15, ge=1, le=60)
+    gemini_max_retries: int = Field(default=1, ge=0, le=3)
+    gemini_prompt_version: Literal["v1"] = "v1"
+
+    #: Test-only provider selection. It is ignored unless ``APP_ENV=e2e``.
+    ai_test_provider: str = ""
+
     google_client_id: str = ""
 
     knowledge_base_dir: str = "../knowledge_base"
@@ -47,6 +59,17 @@ class Settings(BaseSettings):
         """
         placeholder_values = {"", "replace_me"}
         return self.llm_provider not in placeholder_values and bool(self.llm_api_key)
+
+    @property
+    def gemini_configured(self) -> bool:
+        """Whether Gemini may be called for optional assisted wording."""
+        placeholder_values = {"", "replace_me"}
+        api_key = self.gemini_api_key.get_secret_value()
+        return (
+            self.gemini_enabled
+            and api_key not in placeholder_values
+            and self.gemini_model not in placeholder_values
+        )
 
     @property
     def knowledge_base_path(self) -> Path:

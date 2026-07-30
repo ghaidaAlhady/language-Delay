@@ -132,12 +132,32 @@ flowchart LR
    validation errors, and any unhandled exception into the consistent JSON envelope — stack
    traces never reach the client.
 
-## Why deterministic generation, not an LLM call
+## Deterministic authority and optional assisted wording
 
-No LLM provider is configured by default (`Settings.llm_configured` is `False` unless
-`LLM_PROVIDER`/`LLM_API_KEY` are set to real values). Every report, weekly-plan, and
-follow-up sentence in this session's implementation is either a verbatim KB03/KB04 text
-snapshot or a simple Arabic sentence template filled with KB fields (domain name,
-recommendation text) — never freely generated. This satisfies "if retrieval fails / no
-provider configured, use a real deterministic fallback — never fabricate" without needing an
-API key to be a fully functional product.
+Reports, scores, severity/referral decisions, weekly plans, and follow-up calculations remain
+fully deterministic and KB-grounded. Milestone 2 adds a separate optional wording layer:
+
+```mermaid
+flowchart LR
+    A[Authenticated POST] --> B[Masked resource ownership check]
+    B --> C[Whitelisted context builder]
+    C --> D[Approved KB01-KB06 records]
+    C --> E[Minimized immutable facts]
+    D & E --> F[Versioned prompt v1]
+    F --> G[Provider-neutral AIProvider]
+    G --> H[Official google-genai adapter]
+    H --> I[Strict AssistanceContent JSON]
+    I --> J[Pydantic + safety + grounding + immutable validation]
+    J -->|valid| K[Gemini wording]
+    J -->|any failure| L[Deterministic Arabic fallback]
+```
+
+`app/ai` owns contracts, context minimization, prompts, providers, validation,
+orchestration, and fallbacks. API routes never call Gemini directly. The default provider is
+disabled; the real adapter is constructed only when `GEMINI_ENABLED`, `GEMINI_API_KEY`, and
+`GEMINI_MODEL` are all configured. A fake provider is selectable only under
+`APP_ENV=e2e`.
+
+No migration or generated-text persistence is introduced. The React frontend calls only the
+three backend assistance endpoints and never receives a provider key, SDK, prompt, or raw
+response.

@@ -8,6 +8,8 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.orchestration import AIAssistanceService
+from app.ai.protocols import AIProvider
 from app.core.config import Settings, get_settings
 from app.core.database import get_db as _get_db
 from app.core.errors import UnauthorizedError
@@ -34,6 +36,10 @@ async def get_db_session() -> AsyncIterator[AsyncSession]:
 
 def get_kb_repository(request: Request) -> KnowledgeBaseRepository:
     return request.app.state.kb_repository
+
+
+def get_ai_provider(request: Request) -> AIProvider:
+    return request.app.state.ai_provider
 
 
 def get_settings_dep() -> Settings:
@@ -79,6 +85,20 @@ def get_followup_service(
     kb: Annotated[KnowledgeBaseRepository, Depends(get_kb_repository)],
 ) -> FollowupService:
     return FollowupService(session=session, kb=kb)
+
+
+def get_ai_assistance_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    kb: Annotated[KnowledgeBaseRepository, Depends(get_kb_repository)],
+    provider: Annotated[AIProvider, Depends(get_ai_provider)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+) -> AIAssistanceService:
+    return AIAssistanceService(
+        session=session,
+        kb=kb,
+        provider=provider,
+        settings=settings,
+    )
 
 
 async def get_current_user(

@@ -73,6 +73,266 @@ None known as of this update. E2E suite execution is the next actual verificatio
 
 ## Current Agent Handoff
 
+### Live Gemini request compatibility correction (2026-07-30)
+
+- **Repository:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
+- **Branch:** `feature/web-frontend`; no branch change was made.
+- **HEAD:** `bbb896264ea35378086a825769725f9c0ae6cedd`
+  (`fix: correct weekly follow-up and Arabic report output`).
+- **Scope:** only the live Gemini request adapter incompatibility reported after the
+  user's successful key/model connectivity smoke test.
+- **Root cause:** the adapter passed the strict Pydantic model through
+  `GenerateContentConfig.response_schema`. With `google-genai==1.75.0`, that legacy
+  OpenAPI-schema path converted both `ConfigDict(extra="forbid")` declarations into the
+  invalid snake-case field `additional_properties: false` inside
+  `generationConfig.responseSchema` (and likewise converted `propertyOrdering`). The
+  Gemini endpoint rejects that unknown request field with HTTP 400. This is the documented
+  `response_schema`/`additionalProperties` incompatibility. The key, model access, network,
+  `application/json` MIME type, prompt string, default `v1beta` API version, and async
+  client lifecycle were not the cause.
+- **Correction:** `backend/app/ai/providers/gemini.py` now sends the Pydantic-derived shape
+  through `response_json_schema`, preserves `additionalProperties: false`, and removes only
+  JSON Schema keywords outside Gemini's documented supported subset before transmission.
+  The strict `AssistanceContent` Pydantic validation, length bounds, extra-field rejection,
+  disclaimer, grounding, safety, and immutable-fact checks remain unchanged after generation.
+- **AFC/tools:** `AutomaticFunctionCallingConfig(disable=True)` is explicit. No tools or
+  function declarations are sent, so the unnecessary SDK AFC loop and its
+  `max remote calls: 10` log are disabled.
+- **Safe diagnostics:** provider failures now log only an allowlisted HTTP status,
+  allowlisted provider status, and stable error category. Raw exception text, request
+  content, prompts, provider responses, authentication data, resource IDs, and PII are
+  neither logged nor exposed through `ProviderError` or the frontend response.
+- **Output/token review:** no `system_instruction` is sent; the complete minimized v1 prompt
+  remains a normal string content part, which the SDK supports. `max_output_tokens` remains
+  unset, so the model default applies; this was not involved in the 400. The SDK default
+  `v1beta` endpoint and the existing awaited `client.aio.aclose()` are compatible.
+
+#### Correction verification
+
+- Focused offline Gemini adapter tests: **3 passed**. They exercise the installed SDK's
+  public async `generate_content` serialization with a mocked transport, assert
+  `responseJsonSchema` (not `responseSchema`), strict `additionalProperties: false`,
+  removal of unsupported `minLength`/`maxLength`/`default`, no tools, AFC disabled, and
+  safe error metadata. No network call is made by these tests.
+- Backend AI validation tests: **23 passed**.
+- Backend AI API tests: **13 passed**.
+- Mypy: **passed**, no issues in **85 source files**.
+- Ruff: **passed** for both changed/new backend Python files.
+- Live verification: the user manually completed a successful live Gemini verification
+  with `generation_source = gemini`, `fallback_reason = null`, and
+  `prompt_version = v1`. This agent did **not** run the opt-in live Gemini test. During the
+  first API-suite attempt, the existing
+  `test_disabled_by_default` inherited the locally enabled Gemini setting and attempted a
+  connection; the sandbox refused it with `ConnectError` before any provider response.
+  The suite was immediately rerun with `GEMINI_ENABLED=false` for the test process and all
+  36 validation/API tests passed offline. No key or provider payload appeared in output.
+- Secrets: `backend/.env` was not opened, printed, modified, staged, or committed. No API
+  key value was read by the agent or included in a command, test fixture, diff, or report.
+
+#### Files and next action for this correction
+
+- Correction files safe to stage only after explicit approval:
+  - `backend/app/ai/providers/gemini.py`
+  - `backend/tests/test_gemini_provider.py`
+  - `PROGRESS.md`
+- All other preserved Milestone 2 modifications and untracked files remain as listed in the
+  handoff below. `.claude/`, `AGENTS.md`, and `agent_test.txt` remain local-only and must not
+  be staged. Never stage `backend/.env`, secrets, databases, logs, `.venv`, build output, or
+  test/browser artifacts.
+- **Exact next action:** complete the explicitly authorized final Milestone 2 staging,
+  commit, and current-branch push after the secret/artifact checks pass, then stop before
+  beginning Milestone 3.
+- Suggested commit message after successful manual verification and separate approval:
+  `fix(ai): use Gemini-compatible structured output schema`
+
+### Authoritative Milestone 2 Gemini handoff (2026-07-28)
+
+- **Repository path:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
+- **Current branch:** `feature/web-frontend`; no branch change was made.
+- **Last commit:** `bbb896264ea35378086a825769725f9c0ae6cedd`
+  (`fix: correct weekly follow-up and Arabic report output`).
+- **Working tree:** intentionally not clean. The preserved Milestone 2 implementation,
+  tests, configuration, and documentation are unstaged. The pre-existing/requested local
+  files `.claude/settings.local.json`, `AGENTS.md`, and `agent_test.txt` remain untracked and
+  preserved.
+- **Current milestone:** Milestone 2 — Safe Gemini-assisted explanations.
+- **Current checkpoint:** implementation and required verification are complete locally;
+  review and explicit staging approval are pending.
+- **Last completed checkpoint in Git:** Milestone 1 focused corrections at `bbb8962`.
+- **Milestone report:** `MILESTONE_2_GEMINI_IMPLEMENTATION_REPORT.md`.
+
+#### Work already completed
+
+- Added a provider-neutral AI wording layer with disabled, fake-E2E, and official
+  `google-genai` providers.
+- Added versioned Arabic prompts, strict Pydantic contracts, deterministic fallbacks, and
+  schema/safety/grounding/immutable-fact validation.
+- Added ownership-scoped context builders and three authenticated, rate-limited endpoints
+  for completed assessment explanations, weekly-plan summaries, and follow-up summaries.
+- Added privacy-minimized route-template/correlation logging without prompts, provider
+  output, generated wording, PII, answer text, notes, or resource IDs.
+- Added RTL frontend assistance cards to all three existing resource pages while keeping
+  deterministic content visible and authoritative.
+- Added backend validator/API/live-opt-in tests, frontend component/page tests, and a
+  fake-provider Desktop Chromium journey covering provider success and timeout fallback.
+- Declared `google-genai>=1,<2`; installed `google-genai==1.75.0` in the local virtual
+  environment and verified adapter construction/async close without generation.
+- Updated architecture, API, security, test, implementation, setup, milestone, and proposal
+  documentation. No database migration or generated wording persistence was added.
+- Assessment scoring, severity, referral, eligibility, KB01–KB06, activity/plan selection,
+  follow-up calculations, authentication, and Arabic PDF behavior were not changed.
+
+#### Verified test results
+
+- Focused backend AI tests: **36 passed** total:
+  - `test_ai_validation.py`: **23 passed**;
+  - `test_ai_assistance_api.py`: **13 passed** across completed bounded invocations.
+- Opt-in live test: **1 skipped** because `RUN_LIVE_GEMINI_TEST=1` was not enabled.
+- Complete backend collection: **203 passed, 1 skipped (204 total)**. The Windows harness
+  intermittently stalled cumulative long-lived pytest processes, so every collected node
+  was verified in completed bounded file/function groups. No assertion failed.
+- Backend Mypy: **passed**, no issues in **85 source files**.
+- Backend Ruff: **passed** across `app` and `tests`.
+- Official adapter construction/close smoke: **passed** with SDK `1.75.0`; no generation.
+- Focused frontend tests: **16 passed in 4 files**.
+- Complete frontend suite: **117 passed in 24 files**.
+- Frontend typecheck: **passed**.
+- Frontend lint: **passed** with the pre-existing
+  `react(only-export-components)` warning at `src/tests/test-utils.tsx:58`.
+- Frontend production build: **passed**; Vite transformed **227 modules**.
+- Focused fake-provider Gemini E2E: **1 passed in 30.8 seconds**, covering all three
+  assistance surfaces plus deterministic timeout fallback.
+- Critical Desktop flows: the combined run produced **4 passed / 1 login failure**; the
+  exact failed non-diagnostic report test passed in a fresh isolated retry. All five
+  critical cases therefore passed across the run and retry.
+- Full Desktop Chromium was not run because the combined critical run reproduced known
+  heavy-run login flakiness, so the conditional “if stable” criterion was not met.
+- **Live Gemini generation calls:** **none**.
+
+#### Known failures and risks
+
+- Login/register remains flaky under heavy repeated E2E load. The critical run's fifth test
+  stayed on `/login`; it passed alone in a fresh server/rate-limit window. Production rate
+  limiting was not weakened.
+- Long single-process pytest commands can stall in this Windows tool environment after
+  already passing tests. Completed bounded runs account for all 204 collected nodes.
+- Milestone 1's separate 27/27 Desktop Chromium twice-consecutively gate remains open.
+- The ignored disposable `backend/language_delay_e2e.db`, frontend build output,
+  `frontend/test-results/`, and Playwright report/artifacts may have been regenerated by
+  verification and must not be staged.
+
+#### Modified and untracked files
+
+Tracked files modified for Milestone 2 and safe to stage only after explicit approval:
+
+- `CLAUDE.md`
+- `MILESTONE_2_GEMINI_PROPOSAL.md`
+- `PROJECT_STATUS_AND_MILESTONES.md`
+- `PROGRESS.md`
+- `README.md`
+- `backend/.env.example`
+- `backend/app/api/deps.py`
+- `backend/app/api/v1/router.py`
+- `backend/app/core/config.py`
+- `backend/app/core/logging.py`
+- `backend/app/core/middleware.py`
+- `backend/app/main.py`
+- `backend/app/repositories/knowledge_base_repository.py`
+- `backend/app/services/weekly_plan_service.py`
+- `backend/requirements.txt`
+- `docs/API_SPEC.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DECISIONS_AND_ASSUMPTIONS.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/IMPLEMENTATION_STATUS.md`
+- `docs/RAG_AI_DESIGN.md`
+- `docs/SECURITY_PRIVACY.md`
+- `docs/TEST_PLAN.md`
+- `frontend/playwright.config.ts`
+- `frontend/src/api/queryKeys.ts`
+- `frontend/src/pages/AssessmentResultPage.test.tsx`
+- `frontend/src/pages/AssessmentResultPage.tsx`
+- `frontend/src/pages/FollowupDetailPage.tsx`
+- `frontend/src/pages/WeeklyPlanPage.test.tsx`
+- `frontend/src/pages/WeeklyPlanPage.tsx`
+- `frontend/src/tests/fixtures.ts`
+- `frontend/src/tests/mocks/handlers.ts`
+- `frontend/src/types/api.ts`
+
+New untracked Milestone 2 files safe to stage only after explicit approval:
+
+- `MILESTONE_2_GEMINI_IMPLEMENTATION_REPORT.md`
+- `backend/app/ai/__init__.py`
+- `backend/app/ai/context_builder.py`
+- `backend/app/ai/fallback.py`
+- `backend/app/ai/orchestration.py`
+- `backend/app/ai/prompts/__init__.py`
+- `backend/app/ai/prompts/v1/__init__.py`
+- `backend/app/ai/prompts/v1/assessment_explanation.py`
+- `backend/app/ai/prompts/v1/common.py`
+- `backend/app/ai/prompts/v1/followup_summary.py`
+- `backend/app/ai/prompts/v1/weekly_plan_summary.py`
+- `backend/app/ai/protocols.py`
+- `backend/app/ai/providers/__init__.py`
+- `backend/app/ai/providers/disabled.py`
+- `backend/app/ai/providers/fake.py`
+- `backend/app/ai/providers/gemini.py`
+- `backend/app/ai/schemas.py`
+- `backend/app/ai/validators.py`
+- `backend/app/api/v1/ai_assistance.py`
+- `backend/tests/test_ai_assistance_api.py`
+- `backend/tests/test_ai_validation.py`
+- `backend/tests/test_gemini_provider.py`
+- `backend/tests/test_live_gemini.py`
+- `frontend/e2e/gemini-assistance.spec.ts`
+- `frontend/src/api/aiAssistance.ts`
+- `frontend/src/components/AiAssistanceCard.test.tsx`
+- `frontend/src/components/AiAssistanceCard.tsx`
+- `frontend/src/features/ai/useAiAssistance.ts`
+- `frontend/src/pages/FollowupDetailPage.test.tsx`
+
+Preserved local untracked files that are **not safe to stage**:
+
+- `.claude/settings.local.json`
+- `AGENTS.md`
+- `agent_test.txt`
+
+#### Work still remaining and exact next action
+
+No additional Milestone 2 application code is known to be required. The exact next action is
+for the user to review `MILESTONE_2_GEMINI_IMPLEMENTATION_REPORT.md`, this handoff, and the
+working-tree diff. If approved, stage only the safe paths listed above, recheck the staged
+diff for secrets/artifacts, and request separate explicit approval before committing or
+pushing. Do not start another milestone automatically.
+
+#### Safety warnings
+
+- Do not stage `.claude/settings.local.json`, `AGENTS.md`, `agent_test.txt`, any `.env`,
+  secret, API key, database, `.venv`, `node_modules`, build output, log, generated report,
+  coverage output, screenshot, trace, video, Playwright artifact, or temporary file.
+- Do not call Gemini unless `RUN_LIVE_GEMINI_TEST=1` is explicitly set and a key/model are
+  already configured locally. Never ask for or print a key.
+- Do not change scoring, severity, referral, KB content, plan/activity selection, follow-up
+  calculations, authentication, or Arabic PDF behavior as part of this milestone.
+- Do not commit, push, merge, reset, clean, revert, deploy, or change branches without a
+  new explicit user instruction.
+- Suggested commit message:
+  `feat(ai): add safe Gemini-assisted parent wording`
+
+#### Suggested prompt for the next coding agent
+
+> Read `CLAUDE.md`, `AGENTS.md`, `PROGRESS.md`,
+> `PROJECT_STATUS_AND_MILESTONES.md`, and
+> `MILESTONE_2_GEMINI_IMPLEMENTATION_REPORT.md`. Confirm repository
+> `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`, branch
+> `feature/web-frontend`, and the complete unstaged working tree. Milestone 2 is implemented
+> and verified locally: backend 203 passed/1 live-opt-in skipped across bounded runs,
+> frontend 117/117, focused fake-provider E2E passed, and critical flows passed across a
+> combined run plus isolated login-flake retry. Do not redo or discard the implementation.
+> Preserve `.claude/settings.local.json`, `AGENTS.md`, and `agent_test.txt`; never stage
+> them or generated artifacts. Do not call live Gemini, commit, push, merge, reset, clean,
+> deploy, or begin another milestone without explicit user approval.
+
 ### Authoritative focused-corrections handoff (2026-07-26)
 
 - **Repository path:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
