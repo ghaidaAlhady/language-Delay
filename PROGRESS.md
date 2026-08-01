@@ -1135,3 +1135,58 @@ Prepared a Netlify + Render + Neon beta deployment path:
 - Alternative activity selection now falls back to a different approved same-domain activity when the unused pool is exhausted, and the frontend deduplicates rapid clicks.
 
 Release verification must still run in the user's complete local environment because this sanitized package intentionally excludes `.venv`, `node_modules`, `.env`, and database files.
+
+## GitHub Actions CI correction handoff (2026-08-01)
+
+- **Repository:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
+- **Branch:** `feature/web-frontend`
+- **Local and fetched remote HEAD:** `90601a2d911eb4a8b1a81bc814698c061e430e8c`
+  (`Fix CI workflow for web deployment`). A safe `git fetch origin --prune` completed;
+  local and `origin/feature/web-frontend` were already identical, so no pull occurred.
+- **GitHub failure causes:** backend CI linted historical generated migrations under
+  `alembic/versions`; the frontend cold-start test queried a non-unique `status` role; the
+  PDF mock passed a jsdom `Blob` through Node 22/MSW `Response`; and the timeout test attached
+  its rejection assertion after advancing the abort timer.
+- **Corrections:** CI now runs `ruff check app tests alembic/env.py`; the gate test targets
+  the Arabic loading heading; the PDF test uses a string-backed response with an explicit
+  `application/pdf` header and verifies Blob/type/body availability; and the timeout test
+  attaches the rejection assertion before timer advancement and verifies timer cleanup.
+  Production frontend code and generated migration revisions were not changed.
+- **Ruff cleanup review:** the interrupted formatter pass originally affected 101 backend
+  Python files. The unrelated broad formatting hunks were removed against committed
+  `90601a2`, which already contains the approved functional and deployment work. Only the
+  three violations reproduced from the committed files remain changed:
+  `alembic/env.py` import ordering, `app/core/config.py`'s `UP037` annotation fix, and
+  `tests/test_config.py` import spacing. No file under `backend/alembic/versions/` is
+  modified.
+
+### Verification
+
+- Backend Ruff: **passed** for `app tests alembic/env.py`.
+- Backend mypy: **passed**, no issues in **91 source files**.
+- Backend pytest after formatter cleanup: **275 passed, 1 live test deselected**, **91%
+  coverage**. An ignored `.venv` temp location avoided the Windows sandbox's user-temp
+  permission problem while retaining the exact pytest arguments. Gemini was explicitly
+  disabled and no live provider call ran.
+- Backend `pip check`: **passed**, no broken requirements.
+- Focused frontend tests: **14 passed in 2 files**.
+- Full frontend tests: **151 passed in 29 files**.
+- Frontend typecheck: **passed**.
+- Frontend lint: **passed** with the pre-existing
+  `react(only-export-components)` warning in `src/tests/test-utils.tsx`.
+- Frontend production build: **passed**; Vite retained the non-blocking >500 kB chunk warning.
+
+### Working tree and safety boundary
+
+- Nothing is staged, committed, pushed, merged, or deployed.
+- Tracked changes consist of the CI workflow, the three exact backend Ruff lint fixes, the
+  two frontend CI tests, and this handoff.
+- Preserved untracked/excluded paths are `.claude/`, `AGENTS.md`, `agent_test.txt`,
+  `backend/.coverage`, and `backend/.envCopy-Item`. None is safe to stage. The two
+  repository-local pytest temp directories created by this verification were removed in
+  the subsequent cleanup review; no older untracked file was removed.
+- `backend/.env` and `frontend/.env` are not tracked or staged. No database path is reported
+  by the requested tracked-working-tree check. No live Gemini request was made.
+- **Exact next action:** wait for the user's next instruction. Do not stage these changes or
+  begin additional GitHub Actions work without explicit approval.
+- **Suggested commit message:** `fix(ci): align lint scope and Node 22 frontend tests`

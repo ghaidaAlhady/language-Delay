@@ -4,7 +4,6 @@ import pytest
 
 from app.core.config import Settings, normalize_database_url
 
-
 PRODUCTION_SECRET = "x" * 48
 PRODUCTION_CORS = ["https://smart-guide.example"]
 

@@ -27,7 +27,7 @@ jobs:
             backend/requirements.txt
             backend/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      - run: ruff check app tests alembic
+      - run: ruff check app tests alembic/env.py
       - run: mypy app
       - run: pytest -k "not live" --cov=app --cov-report=term-missing
       - run: pip check

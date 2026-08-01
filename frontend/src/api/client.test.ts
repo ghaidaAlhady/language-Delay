@@ -115,12 +115,13 @@ describe("apiRequest", () => {
     );
 
     const request = apiRequest("/api/v1/ai-test", { timeoutMs: 30_000 });
+    const rejectionAssertion = expect(request).rejects.toBeInstanceOf(TimeoutError);
     await vi.advanceTimersByTimeAsync(15_000);
     expect(signal?.aborted).toBe(false);
 
     await vi.advanceTimersByTimeAsync(15_000);
-    await expect(request).rejects.toBeInstanceOf(TimeoutError);
-    vi.useRealTimers();
+    await rejectionAssertion;
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("on 401, refreshes the access token once and retries the original request", async () => {
@@ -176,11 +177,21 @@ describe("apiRequestBlob", () => {
   });
 
   it("returns the response body as a Blob on success", async () => {
-    const blob = new Blob(["%PDF-1.4"], { type: "application/pdf" });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(blob, { status: 200 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("%PDF-1.4", {
+          status: 200,
+          headers: { "Content-Type": "application/pdf" },
+        }),
+      ),
+    );
 
     const result = await apiRequestBlob("/api/v1/reports/r1/pdf");
+    expect(result).toBeInstanceOf(Blob);
+    expect(result.type).toBe("application/pdf");
     expect(result.size).toBeGreaterThan(0);
+    expect(await result.text()).toBe("%PDF-1.4");
   });
 
   it("throws ApiError on failure instead of returning a blob", async () => {

@@ -111,7 +111,7 @@ class Settings(BaseSettings):
     pdf_arabic_font_path: str = ""
 
     @model_validator(mode="after")
-    def _validate_production_safety(self) -> "Settings":
+    def _validate_production_safety(self) -> Settings:
         if self.app_env.casefold() != "production":
             return self
 

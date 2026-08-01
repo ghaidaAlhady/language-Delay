@@ -10,7 +10,11 @@ describe("BackendAvailabilityGate", () => {
       </BackendAvailabilityGate>,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("جارٍ تشغيل الخادم");
+    expect(
+      screen.getByRole("heading", {
+        name: /جارٍ تشغيل الخادم/,
+      }),
+    ).toBeInTheDocument();
     expect(await screen.findByText("التطبيق جاهز")).toBeInTheDocument();
   });
 });
