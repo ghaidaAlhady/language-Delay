@@ -5,13 +5,16 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.ai.schemas import FallbackReason, GenerationSource
 from app.rag.schemas import Domain
 from app.schemas.assessment import ResponseValue
 
 
 class WeeklyFollowupQuestionResponse(BaseModel):
     id: str
+    """The generated/selected question id (`generated_question_id`)."""
     source_question_id: str
+    """The KB06 template id this question maps to (`kb06_question_id`)."""
     source_file: str
     weekly_plan_id: str
     age: int
@@ -22,10 +25,16 @@ class WeeklyFollowupQuestionResponse(BaseModel):
     activity_name: str
     expected_behavior: str
     question: str
+    """The Arabic wording shown to the parent (`wording_ar`) — deterministic
+    KB06 text, or Gemini-varied wording that passed grounding/safety
+    validation; scoring only ever depends on `id`/`source_question_id`."""
     response_type: str
     required: bool
     progress_weight: float
     fallback_used: bool
+    linked_activity_ids: list[str] = Field(default_factory=list)
+    source_ids: list[str] = Field(default_factory=list)
+    prompt_version: str = "deterministic"
 
 
 class WeeklyFollowupContextResponse(BaseModel):
@@ -38,6 +47,8 @@ class WeeklyFollowupContextResponse(BaseModel):
     total_activities: int
     weekly_goals: list[str]
     questions: list[WeeklyFollowupQuestionResponse] = Field(min_length=5, max_length=8)
+    generation_source: GenerationSource = GenerationSource.DETERMINISTIC_FALLBACK
+    fallback_reason: FallbackReason | None = None
 
 
 class WeeklyFollowupAnswerItem(BaseModel):

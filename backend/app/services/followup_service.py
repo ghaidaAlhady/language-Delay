@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.schemas import FallbackReason, GenerationSource
+from app.core.database import utcnow
 from app.core.errors import BadRequestError, ConflictError, NotFoundError
 from app.core.logging import get_logger
 from app.models.followup import Followup
@@ -29,7 +31,12 @@ from app.schemas.followup import (
     WeeklyFollowupQuestionResponse,
     WeeklyFollowupSubmissionRequest,
 )
-from app.services.weekly_plan_service import WeeklyPlanService
+from app.services.weekly_plan_service import (
+    WeeklyPlanService,
+    activities_remaining_for_eligibility,
+    completion_stats,
+    is_reassessment_eligible,
+)
 
 logger = get_logger(__name__)
 
@@ -84,10 +91,19 @@ class FollowupService:
                 "The selected weekly plan is no longer the child's active plan."
             )
         slots = await weekly_plan_repository.get_activities(self.session, plan.id)
-        if not slots or any(not slot.completed for slot in slots):
+        completed, total = completion_stats(slots)
+        if not is_reassessment_eligible(completed, total):
             raise BadRequestError(
-                "All activities in the active weekly plan must be completed "
-                "before starting follow-up."
+                "At least 70% of the active weekly plan's activities must be "
+                "completed before starting follow-up.",
+                details={
+                    "completed_count": completed,
+                    "total_activities": total,
+                    "required_percent": 70,
+                    "remaining_for_eligibility": activities_remaining_for_eligibility(
+                        completed, total
+                    ),
+                },
             )
 
     async def _select_questions(
@@ -106,6 +122,12 @@ class FollowupService:
         ordered_slots = sorted(
             slots,
             key=lambda slot: (
+                # Completed activities first (reassessment is now allowed
+                # from 70% completion, so some slots may still be open) —
+                # `select_weekly_followup_questions` below caps to the first
+                # 8, so this ordering is what makes candidate selection
+                # prioritize completed activities.
+                not slot.completed,
                 day_order.get(slot.day, len(day_order)),
                 slot.slot_order,
                 slot.id,
@@ -185,13 +207,114 @@ class FollowupService:
             questions=questions,
         )
 
+    async def get_frozen_question_set(
+        self, *, weekly_plan_id: str, user_id: str
+    ) -> tuple[
+        list[WeeklyFollowupQuestionResponse],
+        GenerationSource,
+        FallbackReason | None,
+    ] | None:
+        """Return the database-frozen question set for this owned plan.
+
+        Invalid legacy/corrupt payloads are ignored safely so the route can
+        regenerate and freeze a valid deterministic/provider-backed set.
+        """
+        plan = await self._get_owned_plan(
+            weekly_plan_id=weekly_plan_id, user_id=user_id
+        )
+        raw_questions = plan.followup_question_context
+        if not raw_questions:
+            return None
+        try:
+            questions = [
+                WeeklyFollowupQuestionResponse.model_validate(item)
+                for item in raw_questions
+            ]
+            if not 5 <= len(questions) <= 8:
+                return None
+            source = GenerationSource(
+                plan.followup_generation_source
+                or GenerationSource.DETERMINISTIC_FALLBACK.value
+            )
+            reason = (
+                FallbackReason(plan.followup_fallback_reason)
+                if plan.followup_fallback_reason
+                else None
+            )
+        except (TypeError, ValueError):
+            logger.warning(
+                "invalid_frozen_followup_question_context",
+                weekly_plan_id=weekly_plan_id,
+            )
+            return None
+        return questions, source, reason
+
+    async def freeze_question_set(
+        self,
+        *,
+        weekly_plan_id: str,
+        user_id: str,
+        questions: list[WeeklyFollowupQuestionResponse],
+        generation_source: GenerationSource,
+        fallback_reason: FallbackReason | None,
+    ) -> tuple[
+        list[WeeklyFollowupQuestionResponse],
+        GenerationSource,
+        FallbackReason | None,
+    ]:
+        """Atomically freeze and return the first question set for a plan."""
+        plan = await self._get_owned_plan(
+            weekly_plan_id=weekly_plan_id, user_id=user_id
+        )
+        stored = await weekly_plan_repository.freeze_followup_questions_if_empty(
+            self.session,
+            weekly_plan_id=plan.id,
+            question_context=[question.model_dump(mode="json") for question in questions],
+            generation_source=generation_source.value,
+            fallback_reason=fallback_reason.value if fallback_reason else None,
+            frozen_at=utcnow(),
+        )
+        stored_questions = [
+            WeeklyFollowupQuestionResponse.model_validate(item)
+            for item in (stored.followup_question_context or [])
+        ]
+        stored_source = GenerationSource(
+            stored.followup_generation_source
+            or GenerationSource.DETERMINISTIC_FALLBACK.value
+        )
+        stored_reason = (
+            FallbackReason(stored.followup_fallback_reason)
+            if stored.followup_fallback_reason
+            else None
+        )
+        return stored_questions, stored_source, stored_reason
+
+    async def get_existing_for_plan(
+        self, *, weekly_plan_id: str, user_id: str
+    ) -> Followup | None:
+        """Cheap idempotency pre-check, deliberately with no plan-readiness
+        validation: a plan is always deactivated once its follow-up is
+        submitted, so validating "is this plan still active" would itself
+        reject the very duplicate-submission case this is meant to detect.
+        Callers (the API route) must check this *before* building an
+        AI-varied question context, not after."""
+        plan = await self._get_owned_plan(
+            weekly_plan_id=weekly_plan_id, user_id=user_id
+        )
+        return await followup_repository.get_by_weekly_plan_id(self.session, plan.id)
+
     async def submit(
         self,
         *,
         weekly_plan_id: str,
         user_id: str,
         payload: WeeklyFollowupSubmissionRequest,
+        expected_questions: list[WeeklyFollowupQuestionResponse] | None = None,
     ) -> Followup:
+        """`expected_questions` should be the exact set the parent was shown
+        (e.g. the AI-varied/frozen set from `app.ai.followup_questions`, via
+        the API route composition). Falls back to the plain deterministic set
+        when not supplied, e.g. direct API use without the AI layer."""
         plan = await self._get_owned_plan(
             weekly_plan_id=weekly_plan_id, user_id=user_id
         )
@@ -202,10 +325,12 @@ class FollowupService:
             return existing
 
         await self._validate_plan_ready(plan)
-        context = await self.get_question_context(
-            weekly_plan_id=plan.id, user_id=user_id
-        )
-        expected_by_id = {question.id: question for question in context.questions}
+        if expected_questions is None:
+            context = await self.get_question_context(
+                weekly_plan_id=plan.id, user_id=user_id
+            )
+            expected_questions = context.questions
+        expected_by_id = {question.id: question for question in expected_questions}
         submitted_ids = [answer.question_id for answer in payload.answers]
         duplicate_ids = sorted(
             question_id
@@ -267,7 +392,7 @@ class FollowupService:
         )
         priority_question = next(
             question
-            for question in context.questions
+            for question in expected_questions
             if question.domain == priority_domain
         )
         next_goal = (
@@ -294,7 +419,7 @@ class FollowupService:
                 question_answers=answer_snapshot,
                 question_context=[
                     question.model_dump(mode="json")
-                    for question in context.questions
+                    for question in expected_questions
                 ],
             )
         except IntegrityError:

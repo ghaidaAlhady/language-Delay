@@ -11,6 +11,7 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { SkeletonCard } from "@/components/Skeleton";
 import { useToast } from "@/components/ToastContext";
 import { useWeeklyPlanAssistance } from "@/features/ai/useAiAssistance";
+import { activitiesRemainingForEligibility, isReassessmentEligible } from "@/features/weeklyPlan/eligibility";
 import {
   useActiveWeeklyPlan,
   useRequestAlternativeActivity,
@@ -31,6 +32,7 @@ export function WeeklyPlanPage() {
   const setCompletion = useSetActivityCompletion(childId ?? "");
   const requestAlternative = useRequestAlternativeActivity(childId ?? "");
   const completionInFlightRef = useRef(new Set<string>());
+  const alternativeInFlightRef = useRef(new Set<string>());
 
   if (planQuery.isPending) return <SkeletonCard />;
 
@@ -73,9 +75,12 @@ export function WeeklyPlanPage() {
   }
 
   function handleAlternative(activitySlotId: string): void {
+    if (alternativeInFlightRef.current.has(activitySlotId)) return;
+    alternativeInFlightRef.current.add(activitySlotId);
     requestAlternative.mutate(activitySlotId, {
       onSuccess: () => showToast("تم استبدال النشاط بنشاط بديل.", "success"),
       onError: (error) => showToast(getArabicErrorMessage(error), "error"),
+      onSettled: () => alternativeInFlightRef.current.delete(activitySlotId),
     });
   }
 
@@ -99,28 +104,17 @@ export function WeeklyPlanPage() {
         data={assistanceQuery.data}
         isPending={assistanceQuery.isPending}
         isError={assistanceQuery.isError}
-        onRetry={() => void assistanceQuery.refetch()}
+        isFetching={assistanceQuery.isFetching}
+        onRetry={() => {
+          if (!assistanceQuery.isFetching) {
+            void assistanceQuery.refetch({ cancelRefetch: false });
+          }
+        }}
       />
 
-      {plan.is_active &&
-        plan.total_activities > 0 &&
-        plan.completed_count === plan.total_activities && (
-          <Card className="border-2 border-success-500 bg-success-50 text-center">
-            <h2 className="text-xl font-bold text-primary-900">
-              أكملتم الخطة الأسبوعية
-            </h2>
-            <p className="mt-2 text-gray-700">
-              حان وقت تقييم تقدم الطفل وإنشاء خطة الأسبوع القادم.
-            </p>
-            <div className="mt-4">
-              <Link
-                to={`/children/${plan.child_id}/reassessment?planId=${encodeURIComponent(plan.id)}`}
-              >
-                <Button size="lg">ابدأ المتابعة الأسبوعية</Button>
-              </Link>
-            </div>
-          </Card>
-        )}
+      {plan.is_active && (
+        <ReassessmentEligibilityCard plan={plan} />
+      )}
 
       {days.length === 0 && <EmptyState title="لا توجد أنشطة في هذه الخطة." />}
 
@@ -135,7 +129,13 @@ export function WeeklyPlanPage() {
                   <WeeklyActivityCard
                     key={slot.id}
                     slot={slot}
-                    isUpdating={setCompletion.isPending || requestAlternative.isPending}
+                    allowAlternative={!plan.reassessment_started}
+                    isUpdating={
+                      (setCompletion.isPending &&
+                        setCompletion.variables?.activitySlotId === slot.id) ||
+                      (requestAlternative.isPending &&
+                        requestAlternative.variables === slot.id)
+                    }
                     onToggleCompleted={() => handleToggle(slot.id, slot.completed)}
                     onRequestAlternative={() => handleAlternative(slot.id)}
                   />
@@ -145,5 +145,56 @@ export function WeeklyPlanPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+interface ReassessmentEligibilityCardProps {
+  plan: {
+    id: string;
+    child_id: string;
+    total_activities: number;
+    completed_count: number;
+    reassessment_started: boolean;
+  };
+}
+
+function ReassessmentEligibilityCard({ plan }: ReassessmentEligibilityCardProps) {
+  if (plan.total_activities === 0) return null;
+
+  const eligible = isReassessmentEligible(plan.completed_count, plan.total_activities);
+  const remaining = activitiesRemainingForEligibility(plan.completed_count, plan.total_activities);
+  const hasStartedFollowup = plan.reassessment_started;
+
+  return (
+    <Card className={eligible ? "border-2 border-success-500 bg-success-50 text-center" : "text-center"}>
+      <h2 className="text-xl font-bold text-primary-900">
+        {eligible ? "أصبحت إعادة التقييم متاحة" : "إعادة التقييم الأسبوعي"}
+      </h2>
+      <p className="mt-2 text-gray-700">
+        {eligible
+          ? `أكملتِ ${plan.completed_count} من ${plan.total_activities} نشاطًا — أصبحت إعادة التقييم متاحة.`
+          : "يمكنك بدء إعادة التقييم بعد إكمال 70% من الأنشطة."}
+      </p>
+      {!eligible && remaining > 0 && (
+        <p className="mt-1 text-sm text-gray-600">
+          {remaining === 1
+            ? "أكملي نشاطًا واحدًا إضافيًا لفتح إعادة التقييم."
+            : `أكملي ${remaining} أنشطة إضافية لفتح إعادة التقييم.`}
+        </p>
+      )}
+      <div className="mt-4">
+        {eligible ? (
+          <Link to={`/children/${plan.child_id}/reassessment?planId=${encodeURIComponent(plan.id)}`}>
+            <Button size="lg">
+              {hasStartedFollowup ? "متابعة إعادة التقييم" : "بدء إعادة التقييم"}
+            </Button>
+          </Link>
+        ) : (
+          <Button size="lg" disabled>
+            إعادة التقييم الأسبوعي
+          </Button>
+        )}
+      </div>
+    </Card>
   );
 }

@@ -1,0 +1,62 @@
+# Version control and editor state
+.git
+.github
+.vscode
+.idea
+.claude
+
+# Secrets and local configuration
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python environments and caches
+.venv
+**/.venv
+venv
+**/venv
+__pycache__
+**/__pycache__
+.pytest_cache
+**/.pytest_cache
+.ruff_cache
+**/.ruff_cache
+.mypy_cache
+**/.mypy_cache
+*.py[cod]
+*.egg-info
+
+# Node / frontend outputs are not needed by the API image
+node_modules
+**/node_modules
+frontend/dist
+frontend/coverage
+frontend/test-results
+frontend/playwright-report
+frontend/blob-report
+frontend/.vite
+
+# Runtime data, secrets, reports, and logs
+*.db
+*.sqlite
+*.sqlite3
+logs
+**/logs
+uploads
+generated_reports
+*.log
+
+# Test and temporary artifacts
+coverage
+htmlcov
+*.lcov
+screenshots
+**/screenshots
+traces
+**/traces
+videos
+**/videos
+_*.txt
+*.zip

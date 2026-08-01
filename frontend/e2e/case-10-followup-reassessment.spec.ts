@@ -56,12 +56,12 @@ test("Case 10: completed plan opens KB06 follow-up once and activates a persiste
     ).toHaveCount(index + 1);
   }
 
-  await expect(page.getByText("أكملتم الخطة الأسبوعية")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "أصبحت إعادة التقييم متاحة" })).toBeVisible();
   await expect(
-    page.getByText("حان وقت تقييم تقدم الطفل وإنشاء خطة الأسبوع القادم."),
+    page.getByText("أكملتِ 14 من 14 نشاطًا — أصبحت إعادة التقييم متاحة."),
   ).toBeVisible();
   const followupCta = page.getByRole("link", {
-    name: "ابدأ المتابعة الأسبوعية",
+    name: "بدء إعادة التقييم",
   });
   await expect(followupCta).toHaveAttribute(
     "href",
@@ -72,11 +72,11 @@ test("Case 10: completed plan opens KB06 follow-up once and activates a persiste
   await page.reload();
   await expect(page.getByText("الإنجاز — 14 من 14")).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "ابدأ المتابعة الأسبوعية" }),
+    page.getByRole("link", { name: "بدء إعادة التقييم" }),
   ).toBeVisible();
 
   // Open through normal navigation and verify exact child/plan context.
-  await page.getByRole("link", { name: "ابدأ المتابعة الأسبوعية" }).click();
+  await page.getByRole("link", { name: "بدء إعادة التقييم" }).click();
   await expect(page).toHaveURL(
     new RegExp(`/children/${childId}/reassessment\\?planId=${initialPlan.id}`),
   );
@@ -184,11 +184,11 @@ test("Case 10: completed plan opens KB06 follow-up once and activates a persiste
   expect(replacementPlan.id).not.toBe(initialPlan.id);
   expect(replacementPlan.assessment_id).toBe(assessmentId);
   expect(replacementPlan.completed_count).toBe(0);
-  await expect(page.getByText("أكملتم الخطة الأسبوعية")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "أصبحت إعادة التقييم متاحة" })).toHaveCount(0);
 
   await page.reload();
   await expect(page.getByText("الإنجاز — 0 من 14")).toBeVisible();
-  await expect(page.getByText("أكملتم الخطة الأسبوعية")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "أصبحت إعادة التقييم متاحة" })).toHaveCount(0);
 
   const staleQuestions = await request.get(
     `${apiOrigin}/api/v1/weekly-plans/${initialPlan.id}/followup-questions`,

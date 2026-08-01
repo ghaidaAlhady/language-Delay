@@ -1018,3 +1018,120 @@ handling, error mapping, or form mutation UI. Do not start with another full-sui
 > knowledge-base files, and all pre-existing work. Show a plan before code changes, run
 > focused tests after every change, do not commit/push/merge/deploy, update `PROGRESS.md`,
 > report every modified/untracked file, and stop before another checkpoint.
+
+---
+
+## Milestone 3 — AI-guided weekly reassessment, activity explanations, source UX
+
+**Note:** the "Work still remaining" / "Suggested prompt" sections directly above this one are
+stale — they predate Checkpoint 3's completion, all of Milestone 2, and now this milestone
+(confirmed via `git log`: `638b324`, `bbb8962`, `53c6343` completed Checkpoint 3; `e5a2736`
+completed Milestone 2). Left as historical record rather than rewritten.
+
+### Status: implemented and verified; not staged, committed, or pushed. Awaiting approval.
+
+### What changed (backend)
+
+- **70% reassessment eligibility** (`backend/app/services/weekly_plan_service.py`): new
+  `is_reassessment_eligible`/`activities_remaining_for_eligibility`/`completion_stats` helpers;
+  `FollowupService._validate_plan_ready` now uses the 70% rule instead of strict 100%.
+- **AI-varied follow-up questions**: new `backend/app/ai/followup_questions.py` (orchestrator
+  with a small process-local optimization only),
+  `backend/app/ai/prompts/v2/followup_question_variation.py`; the first validated question set
+  is now atomically frozen on `weekly_plans` and remains stable across restarts/workers.
+  `app/schemas/followup.py` gained `linked_activity_ids`/`source_ids`/`prompt_version` per
+  question and `generation_source`/`fallback_reason` on the context envelope;
+  `followups.py`'s GET/POST routes compose the deterministic candidates through the
+  orchestrator, with idempotency checked *before* that composition (see bug below).
+- **"افهم أكثر" activity explanation**: new `backend/app/ai/activity_explanation.py`,
+  `backend/app/ai/prompts/v2/activity_explanation.py`, new
+  `POST /weekly-plan-activities/{slot_id}/ai-explanation` route in `weekly_plans.py`.
+- **Source-reference labels**: new `backend/app/ai/source_labels.py`; `AssistanceResponse` and
+  the new `ActivityExplanationResponse` gained `source_references`.
+- **Provider protocol widened**: `ProviderRequest` gained `response_schema` so
+  `providers/gemini.py` builds the correct JSON schema per operation instead of hardcoding
+  `AssistanceContent`. `FakeAIProvider` extended for both new operations.
+- **Test isolation fix**: `tests/conftest.py` gained an autouse fixture defaulting every
+  test's `get_ai_provider` to `DisabledAIProvider`, independent of the local machine's actual
+  `backend/.env` (see "Bugs found and fixed" below — this machine's `.env` had live Gemini
+  credentials enabled from earlier manual verification).
+
+### Bugs found and fixed during this milestone (not pre-existing; introduced by this work)
+
+1. **`UnboundLocalError` in `FollowupService.submit()`**: after refactoring `submit()` to
+   accept an `expected_questions` parameter (so it validates against the exact AI-varied set
+   shown to the parent, not a freshly re-derived one), two later references to the old local
+   `context` variable were missed, crashing every real submission. Fixed; regression test
+   added (`test_submit_with_explicit_expected_questions_does_not_raise`).
+2. **Idempotency-vs-AI-context ordering** in the `POST /followup` route: building the AI-varied
+   context before checking for an existing follow-up meant a duplicate submission's now-
+   inactive plan failed plan-readiness validation instead of returning the existing follow-up.
+   Fixed by adding `FollowupService.get_existing_for_plan` and checking it first, exactly
+   matching the original idempotency behavior.
+3. **My own test bug** in `test_followup_ai_questions.py`: popping the provider override mid-
+   test (instead of explicitly setting `DisabledAIProvider`) fell through to whatever this
+   machine's real `.env` happened to resolve to — occasionally hitting live, quota-exhausted
+   Gemini. Fixed.
+
+### What changed (frontend)
+
+- New: `features/weeklyPlan/eligibility.ts` (backend-mirrored 70% rule, display-only),
+  `components/SourceReferenceDisclosure.tsx`, `components/ActivityExplanationCard.tsx`,
+  `features/ai/useAiAssistance.ts::useActivityExplanation`, `api/aiAssistance.ts
+  ::getActivityExplanation`, `e2e/milestone3-ai-followup-and-explanation.spec.ts`.
+- Updated: `WeeklyPlanPage.tsx` (new `ReassessmentEligibilityCard` replacing the 100%-only
+  celebration card; persisted backend `reassessment_started` state for the
+  "متابعة إعادة التقييم" resume label), `ReassessmentPage.tsx` (70% gate + AI transparency
+  note), `WeeklyActivityCard.tsx`
+  ("افهم أكثر" button + inline explanation card), `AiAssistanceCard.tsx` (raw source-ID line
+  replaced by `SourceReferenceDisclosure`), `types/api.ts`, `tests/fixtures.ts`,
+  `tests/mocks/handlers.ts`, `tests/test-utils.tsx` (`renderWithProviders` now accepts an
+  optional pre-seeded `queryClient`).
+- Fixed pre-existing E2E test text assertions that assumed the old 100%-only completion card:
+  `e2e/case-10-followup-reassessment.spec.ts`.
+
+### Verification results
+
+- Backend: focused Milestone-3-affected suite 110/110 passed (repeated after each fix), full
+  unfiltered suite 251/252 → 252/252 after the test-isolation fix above; `mypy app` clean;
+  `ruff check app tests` clean; `pip check` clean. Confirmed zero live Gemini network requests
+  in the final runs (previously present due to this machine's `.env` state, unrelated to code).
+- Frontend: `npx vitest run` 143/143 passed (27 files); `npm run lint` clean (one pre-existing,
+  unrelated warning); `npm run build` clean.
+- E2E: new focused spec passed 3/3 runs; full 29-test desktop suite passed 29/29 on the final
+  run (one prior run's single failure was the stale `case-10` text assertion above, fixed).
+
+### Known risks
+
+- The full unfiltered backend suite took ~8 hours once during this session's verification —
+  matches a previously documented Windows single-process pytest stall risk. Prefer the
+  Milestone-3-focused subset (fast, reliable) or bounded groups over an unfiltered full run.
+- The full question set and resume signal are now persisted in the database. The remaining
+  process-local cache is an optional performance optimization only and is never authoritative.
+- Hosted beta deployments must use PostgreSQL and run Alembic migration
+  `9c7e4d12a6b1`; local SQLite remains supported for development only.
+
+### Files that must not be staged
+
+`.env` files, `backend/language_delay*.db`, `frontend/test-results/`, `frontend/playwright-report/`,
+screenshots, traces, videos, `node_modules/`, and any `_*.txt`/temporary scratch files created
+during this session's verification (all already cleaned up / gitignored, none remain untracked).
+
+### Suggested commit message
+
+`feat(ai): add 70% reassessment eligibility, AI-varied follow-up questions, activity explanations, and source-reference UX`
+
+## Deployment hardening addendum (2026-08-01)
+
+Prepared a Netlify + Render + Neon beta deployment path:
+
+- Added hosted PostgreSQL support (`asyncpg`) and Neon-style URL normalization.
+- Production now rejects ephemeral SQLite and wildcard CORS.
+- Added Alembic revision `9c7e4d12a6b1` to persist frozen follow-up questions on weekly plans.
+- Reassessment resume state is now returned by the backend and survives restarts/tabs.
+- Added Netlify SPA configuration, Render Blueprint, Python version pin, and deployment guide.
+- Added a frontend cold-start gate for sleeping free Render services.
+- Improved Arabic PDF sanitization/layout and packaged-font use.
+- Alternative activity selection now falls back to a different approved same-domain activity when the unused pool is exhausted, and the frontend deduplicates rapid clicks.
+
+Release verification must still run in the user's complete local environment because this sanitized package intentionally excludes `.venv`, `node_modules`, `.env`, and database files.

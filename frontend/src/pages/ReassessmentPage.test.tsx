@@ -59,6 +59,43 @@ describe("ReassessmentPage", () => {
       screen.queryByText("هل يستجيب الطفل عند مناداة اسمه؟"),
     ).not.toBeInTheDocument();
     expect(submissionCount).toBe(0);
+    expect(
+      screen.getByText(
+        "تمت صياغة الأسئلة بناءً على أنشطة الخطة الأسبوعية، بينما يعتمد حساب النتيجة على معايير المتابعة المعتمدة.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("becomes available at exactly the 70% eligibility threshold, not only at 100%", async () => {
+    const eligiblePlan = {
+      ...fixtureWeeklyPlan,
+      total_activities: 10,
+      completed_count: 7,
+      activities: Array.from({ length: 10 }, (_, index) => ({
+        ...fixtureWeeklyPlan.activities[0]!,
+        id: `slot-${index}`,
+        slot_order: index + 1,
+        completed: index < 7,
+      })),
+    };
+    server.use(
+      http.get(`${BASE}/api/v1/children/:childId/weekly-plan`, () =>
+        HttpResponse.json(eligiblePlan),
+      ),
+    );
+
+    renderWithProviders(<ReassessmentPage />, {
+      authenticated: true,
+      path: "/children/:childId/reassessment",
+      initialEntry: "/children/child-1/reassessment?planId=plan-1",
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "المتابعة الأسبوعية" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("إعادة التقييم غير متاحة بعد"),
+    ).not.toBeInTheDocument();
   });
 
   it("blocks follow-up and does not load KB06 while the active plan is incomplete", async () => {
@@ -76,7 +113,7 @@ describe("ReassessmentPage", () => {
       initialEntry: "/children/child-1/reassessment?planId=plan-1",
     });
 
-    expect(await screen.findByText("أكمل الخطة الأسبوعية أولًا")).toBeInTheDocument();
+    expect(await screen.findByText("إعادة التقييم غير متاحة بعد")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "العودة إلى الخطة الأسبوعية" })).toBeInTheDocument();
     expect(questionRequestCount).toBe(0);
   });

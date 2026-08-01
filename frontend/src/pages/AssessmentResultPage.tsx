@@ -138,7 +138,12 @@ export function AssessmentResultPage() {
         data={assistanceQuery.data}
         isPending={assistanceQuery.isPending}
         isError={assistanceQuery.isError}
-        onRetry={() => void assistanceQuery.refetch()}
+        isFetching={assistanceQuery.isFetching}
+        onRetry={() => {
+          if (!assistanceQuery.isFetching) {
+            void assistanceQuery.refetch({ cancelRefetch: false });
+          }
+        }}
       />
 
       {(generateReport.isError || generateWeeklyPlan.isError) && (

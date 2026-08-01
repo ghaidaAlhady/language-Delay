@@ -223,8 +223,10 @@ def test_incomplete_gemini_configuration_uses_disabled_provider() -> None:
 
 def test_fake_provider_is_available_only_in_e2e() -> None:
     production = Settings(
-        secret_key="test",
+        secret_key="x" * 48,
         app_env="production",
+        database_url="postgresql+asyncpg://user:password@localhost/app",
+        cors_origins=["https://smart-guide.example"],
         ai_test_provider="fake",
         _env_file=None,
     )

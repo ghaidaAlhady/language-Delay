@@ -1,6 +1,6 @@
 # Database Schema
 
-SQLite for MVP (`DATABASE_URL`), via SQLAlchemy 2.x async ORM + Alembic migrations
+SQLite for local development and PostgreSQL for hosted deployment (`DATABASE_URL`), via SQLAlchemy 2.x async ORM + Alembic migrations
 (`backend/alembic/versions/`). All primary keys are UUIDv4 strings. All tables have
 `created_at`/`updated_at` (UTC, timezone-aware — see `UTCDateTime` in
 `docs/DECISIONS_AND_ASSUMPTIONS.md`). Foreign keys use `ON DELETE CASCADE`, and SQLite's
@@ -156,3 +156,8 @@ Run from `backend/`: `alembic upgrade head`. Each phase of this session added on
 (`backend/alembic/versions/`): users+refresh_tokens → children → assessments (3 tables) →
 reports → weekly_plans (2 tables) → followups → plan-linked follow-up context. All verified
 to apply cleanly against a fresh database (see `IMPLEMENTATION_STATUS.md`).
+
+
+## Hosted reassessment persistence
+
+`weekly_plans` stores `followup_question_context`, `followup_generation_source`, `followup_fallback_reason`, and `followup_questions_frozen_at`. The first generated/selected 5-8 question set is written with a conditional update (`... WHERE followup_question_context IS NULL`) so concurrent requests and process restarts all return the same winner. The completed `followups.question_context` remains the immutable submission snapshot.

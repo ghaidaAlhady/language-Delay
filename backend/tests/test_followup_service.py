@@ -99,6 +99,17 @@ async def _complete_plan(
         await weekly_plan_service.set_completion(slot, completed=True)
 
 
+async def _complete_n_activities(
+    db_session: AsyncSession,
+    weekly_plan_service: WeeklyPlanService,
+    plan_id: str,
+    n: int,
+) -> None:
+    slots = await weekly_plan_repository.get_activities(db_session, plan_id)
+    for slot in slots[:n]:
+        await weekly_plan_service.set_completion(slot, completed=True)
+
+
 def _payload_for_context(context, response: ResponseValue = ResponseValue.ALWAYS):
     return WeeklyFollowupSubmissionRequest(
         answers=[
@@ -108,7 +119,7 @@ def _payload_for_context(context, response: ResponseValue = ResponseValue.ALWAYS
     )
 
 
-async def test_kb06_context_requires_fully_completed_active_plan(
+async def test_kb06_context_requires_at_least_70_percent_completed(
     assessment_service: AssessmentService,
     followup_service: FollowupService,
     weekly_plan_service: WeeklyPlanService,
@@ -122,10 +133,42 @@ async def test_kb06_context_requires_fully_completed_active_plan(
         weekly_plan_service=weekly_plan_service,
     )
 
-    with pytest.raises(BadRequestError, match="All activities"):
+    with pytest.raises(BadRequestError, match="At least 70%"):
         await followup_service.get_question_context(
             weekly_plan_id=plan.id, user_id=user_id
         )
+
+
+async def test_kb06_context_eligibility_boundary_at_70_percent(
+    assessment_service: AssessmentService,
+    followup_service: FollowupService,
+    weekly_plan_service: WeeklyPlanService,
+    child_service: ChildService,
+    db_session: AsyncSession,
+) -> None:
+    """14-activity plan: 70% = ceil(9.8) = 10. 9/14 rejected, 10/14 allowed."""
+    user_id, _child, _assessment, plan = await _create_child_and_plan(
+        db_session=db_session,
+        assessment_service=assessment_service,
+        child_service=child_service,
+        weekly_plan_service=weekly_plan_service,
+    )
+    await _complete_n_activities(db_session, weekly_plan_service, plan.id, 9)
+
+    with pytest.raises(BadRequestError, match="At least 70%"):
+        await followup_service.get_question_context(
+            weekly_plan_id=plan.id, user_id=user_id
+        )
+
+    remaining_slots = await weekly_plan_repository.get_activities(db_session, plan.id)
+    incomplete = next(slot for slot in remaining_slots if not slot.completed)
+    await weekly_plan_service.set_completion(incomplete, completed=True)
+
+    context = await followup_service.get_question_context(
+        weekly_plan_id=plan.id, user_id=user_id
+    )
+    assert context.completed_count == 10
+    assert context.total_activities == 14
 
 
 async def test_kb06_context_matches_plan_age_domain_goal_and_activity(
@@ -281,6 +324,44 @@ async def test_submit_persists_kb06_answers_and_activates_replacement_plan(
     assert replacement.assessment_id == assessment.id
     assert replacement.is_active is True
     assert plan.is_active is False
+
+
+async def test_submit_with_explicit_expected_questions_does_not_raise(
+    assessment_service: AssessmentService,
+    followup_service: FollowupService,
+    weekly_plan_service: WeeklyPlanService,
+    child_service: ChildService,
+    db_session: AsyncSession,
+) -> None:
+    """Regression test: the API route always calls `submit(...,
+    expected_questions=<the frozen/shown set>)` (see `followups.py`'s
+    `_build_ai_varied_context` composition), never leaving it `None`. A
+    previous version of `submit()` still referenced the now-unassigned local
+    `context` variable later in the function on this exact path, raising
+    `UnboundLocalError` for every real submission. This test calls `submit`
+    the same way the route does, so it fails loudly if that regresses.
+    """
+    user_id, _child, _assessment, plan = await _create_child_and_plan(
+        db_session=db_session,
+        assessment_service=assessment_service,
+        child_service=child_service,
+        weekly_plan_service=weekly_plan_service,
+    )
+    await _complete_plan(db_session, weekly_plan_service, plan.id)
+    context = await followup_service.get_question_context(
+        weekly_plan_id=plan.id, user_id=user_id
+    )
+
+    followup = await followup_service.submit(
+        weekly_plan_id=plan.id,
+        user_id=user_id,
+        payload=_payload_for_context(context),
+        expected_questions=context.questions,
+    )
+
+    assert followup.weekly_plan_id == plan.id
+    assert followup.question_context is not None
+    assert len(followup.question_context) == len(context.questions)
 
 
 async def test_submit_is_idempotent_and_does_not_replace_plan_twice(

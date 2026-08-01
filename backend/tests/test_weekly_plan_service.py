@@ -12,7 +12,12 @@ from app.schemas.assessment import AnswerItem, AnswerSubmissionRequest, Response
 from app.schemas.child import ChildCreateRequest, Gender
 from app.services.assessment_service import AssessmentService
 from app.services.child_service import ChildService
-from app.services.weekly_plan_service import TOTAL_ACTIVITIES, WeeklyPlanService
+from app.services.weekly_plan_service import (
+    TOTAL_ACTIVITIES,
+    WeeklyPlanService,
+    activities_remaining_for_eligibility,
+    is_reassessment_eligible,
+)
 
 
 @pytest.fixture
@@ -205,9 +210,8 @@ async def test_suggest_alternative_replaces_activity_without_duplicating(
     response = await weekly_plan_service.build_response(plan)
 
     used_ids = {a.activity.id for a in response.activities}
-    # Find a slot whose domain still has an unused KB02 activity at this age
-    # (the generator's domain-blind top-up can fully exhaust some domains —
-    # see test_suggest_alternative_raises_conflict_when_domain_pool_exhausted).
+    # Find a slot whose domain still has an unused KB02 activity at this age.
+    # A separate regression test covers the legitimate exhausted-pool fallback.
     target = next(
         a
         for a in response.activities
@@ -231,15 +235,16 @@ async def test_suggest_alternative_replaces_activity_without_duplicating(
     assert len(activity_ids) == len(set(activity_ids))
 
 
-async def test_suggest_alternative_raises_conflict_when_domain_pool_exhausted(
+async def test_suggest_alternative_reuses_approved_same_domain_activity_when_pool_exhausted(
     assessment_service: AssessmentService,
     weekly_plan_service: WeeklyPlanService,
     child_service: ChildService,
     db_session: AsyncSession,
+    kb_repository: KnowledgeBaseRepository,
 ) -> None:
-    # Every domain at NOTABLE_DELAY suggests its entire age-appropriate KB02
-    # pool, so a fully-"never" assessment can exhaust a domain with no
-    # unused activity left to offer as an alternative.
+    # A fully-"never" assessment may already use every activity in a domain.
+    # The parent should still receive a different approved same-domain option
+    # rather than an unavoidable 409 conflict.
     _user_id, _child, assessment = await _completed_assessment(
         assessment_service, child_service, db_session, response=ResponseValue.NEVER
     )
@@ -248,9 +253,69 @@ async def test_suggest_alternative_raises_conflict_when_domain_pool_exhausted(
 
     from app.repositories import weekly_plan_repository
 
+    original = response.activities[0]
+    slot = await weekly_plan_repository.get_activity_by_id(db_session, original.id)
+    assert slot is not None
+    updated = await weekly_plan_service.suggest_alternative(slot)
+
+    assert updated.activity_id != original.activity.id
+    assert kb_repository.get_activity(updated.activity_id).domain == original.activity.domain
+
+
+async def test_suggest_alternative_is_blocked_after_reassessment_starts(
+    assessment_service: AssessmentService,
+    weekly_plan_service: WeeklyPlanService,
+    child_service: ChildService,
+    db_session: AsyncSession,
+) -> None:
+    _user_id, _child, assessment = await _completed_assessment(
+        assessment_service, child_service, db_session, response=ResponseValue.ALWAYS
+    )
+    plan = await weekly_plan_service.generate(assessment)
+    response = await weekly_plan_service.build_response(plan)
+
+    plan.followup_question_context = [{"id": "frozen-question"}]
+    await db_session.commit()
+
+    from app.repositories import weekly_plan_repository
+
     slot = await weekly_plan_repository.get_activity_by_id(
         db_session, response.activities[0].id
     )
     assert slot is not None
-    with pytest.raises(ConflictError):
+    with pytest.raises(ConflictError, match="after weekly reassessment has started"):
         await weekly_plan_service.suggest_alternative(slot)
+
+
+@pytest.mark.parametrize(
+    ("completed", "total", "expected"),
+    [
+        (7, 10, True),
+        (9, 14, False),
+        (10, 14, True),
+        (14, 14, True),
+        (0, 0, False),
+        (0, 10, False),
+    ],
+)
+def test_is_reassessment_eligible_boundary_matrix(
+    completed: int, total: int, expected: bool
+) -> None:
+    assert is_reassessment_eligible(completed, total) is expected
+
+
+@pytest.mark.parametrize(
+    ("completed", "total", "expected_remaining"),
+    [
+        (7, 10, 0),
+        (9, 14, 1),
+        (10, 14, 0),
+        (14, 14, 0),
+        (0, 0, 0),
+        (0, 10, 7),
+    ],
+)
+def test_activities_remaining_for_eligibility_matrix(
+    completed: int, total: int, expected_remaining: int
+) -> None:
+    assert activities_remaining_for_eligibility(completed, total) == expected_remaining

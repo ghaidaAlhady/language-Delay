@@ -9,13 +9,14 @@ about early language development for children aged 2–5.
 ## Current implementation
 
 - Web frontend: React 19, TypeScript, Vite, Tailwind CSS, TanStack Query, and Playwright.
-- Backend: FastAPI, SQLAlchemy, Alembic, and SQLite.
+- Backend: FastAPI, SQLAlchemy, and Alembic; SQLite for local development and PostgreSQL for hosted deployment.
 - Knowledge base: the approved KB01–KB05 workbooks plus the structured, deterministic
   `knowledge_base/KB06.json` weekly-follow-up source.
 - Assessment scoring, specialist-referral decisions, reports, and weekly plans are currently
   deterministic and knowledge-base driven.
-- Optional server-side Gemini wording assistance is implemented for three existing
-  resources, disabled by default, and always backed by deterministic fallbacks.
+- Optional server-side Gemini wording assistance is implemented for assessment/plan/follow-up
+  summaries, grounded weekly follow-up wording, and per-activity explanations. It is disabled
+  by default and every operation has a deterministic fallback.
 
 The implemented MVP includes parent authentication, child profiles, initial assessment,
 results, reports/PDF, weekly plans, weekly follow-up, progress comparison, and persisted
@@ -24,8 +25,8 @@ data after reload/login.
 ### Weekly follow-up workflow
 
 Initial assessment and weekly follow-up are separate flows. KB05 remains the broad,
-age-appropriate initial assessment. After every required activity in the current active plan
-is complete, the parent can open a plan-linked weekly follow-up containing 5–8 deterministic
+age-appropriate initial assessment. After at least 70% of the current active plan activities
+are complete, the parent can open a plan-linked weekly follow-up containing 5–8 deterministic
 KB06 questions matched to the child's age, plan domains, goals, and approved KB02 activities.
 Submitting once stores the answers and weekly progress, deactivates the completed plan, and
 creates the next active plan through the existing deterministic plan service. Retries are
@@ -44,8 +45,8 @@ Backend:
 ```powershell
 cd "C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub\backend"
 .\.venv\Scripts\Activate.ps1
-alembic upgrade head
-uvicorn app.main:app --reload --port 8000
+python -m alembic upgrade head
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
 Frontend:
@@ -64,6 +65,20 @@ Expected local URLs:
 
 See [MANUAL_FRONTEND_TESTING_GUIDE.md](MANUAL_FRONTEND_TESTING_GUIDE.md) for the complete
 manual flow and troubleshooting.
+
+
+## Beta deployment
+
+The repository includes production-oriented deployment configuration for:
+
+- Netlify: React/Vite static frontend with SPA redirects (`netlify.toml`).
+- Render: FastAPI web service with health checks and Alembic migration startup (`render.yaml`).
+- Neon: persistent PostgreSQL through `DATABASE_URL`.
+
+The frontend includes an Arabic cold-start gate for a sleeping free Render backend. Frozen
+weekly reassessment questions are stored in the database, and hosted PostgreSQL URLs are
+normalized for SQLAlchemy asyncpg. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the exact
+setup, environment variables, safety checks, and post-deploy test flow.
 
 ## Verification commands
 
@@ -132,8 +147,37 @@ Copy-Item .env.example .env
 # Edit only the local .env:
 # GEMINI_ENABLED=true
 # GEMINI_API_KEY=<your key>
-# GEMINI_MODEL=gemini-2.5-flash
+# GEMINI_MODEL=<model available to your Google AI project>
 ```
 
 The model is intentionally configuration-only; the repository does not hardcode or
 automatically select one. Disable the feature instantly with `GEMINI_ENABLED=false`.
+
+## Milestone 3 — AI-guided weekly reassessment, activity explanations, source UX
+
+Builds on Milestone 2's provider-neutral AI architecture with two more optional, always-
+deterministic-fallback features, plus one new deterministic rule and a UX fix:
+
+- **70% reassessment eligibility** (replaces the old 100%-only rule): a parent may start the
+  weekly follow-up once at least 70% of the active plan's activities are completed
+  (`completed_count * 100 >= total_activities * 70`, integer-safe, enforced only by the
+  backend in `FollowupService._validate_plan_ready`; a direct API call below 70% is rejected
+  the same way the UI is gated). `0` total activities is never eligible.
+- **AI-varied weekly follow-up questions**: Gemini may only (a) select a 5–8 subset of a
+  deterministic KB06 candidate pool (`select_weekly_followup_questions`, prioritized toward
+  completed activities) and (b) reword the Arabic text — it can never change which KB06
+  template or KB02 activity a question maps to, so scoring is unaffected by wording. The
+  generated/selected set is frozen on the weekly-plan database row. Reloads, Render cold
+  starts, process restarts, and another worker therefore return the exact same set without
+  calling Gemini again; the process-local cache is only an optimization.
+- **"افهم أكثر" activity explanations**: a per-activity AI explanation (purpose, 3–5 steps, an
+  example dialogue, and a simpler same-activity alternative) built only from that one KB02
+  activity's own fields — no child, parent, or session data is ever read to build it.
+- **Source-reference UX**: AI cards now show a compact, collapsed-by-default
+  "المصادر المعتمدة (N)" disclosure with human-readable labels (resolved server-side from the
+  approved KB context, never from provider output) instead of raw comma-separated source IDs;
+  the technical ID remains available as small secondary text for traceability.
+
+Both new AI operations reuse the same disabled-by-default / fake-provider-in-E2E / strict-
+validation-with-deterministic-fallback pipeline as Milestone 2 — see `docs/RAG_AI_DESIGN.md`
+and `docs/API_SPEC.md` for the exact schemas and endpoints.

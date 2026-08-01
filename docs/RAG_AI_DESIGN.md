@@ -126,3 +126,43 @@ Application validators then require:
 Any violation uses the deterministic fallback and records only safe operational metadata.
 There is still no chatbot, autonomous agent, embedding store, or free-text prompt-injection
 surface in this milestone.
+
+## Milestone 3: structured operations and their guardrails
+
+Two new operations don't fit `AssistanceContent`'s narrative shape (title/summary/
+encouragement/action_tips), so each has its own sibling pipeline
+(`app/ai/followup_questions.py`, `app/ai/activity_explanation.py`) reusing the same
+`AIProvider`/`ProviderRequest` protocol, provider selection, and structured/redacted logging —
+`ProviderRequest` gained a `response_schema` field so `providers/gemini.py` builds the correct
+JSON schema per operation instead of always assuming `AssistanceContent`.
+
+**Follow-up question wording** is deliberately the *narrowest* possible surface: Gemini
+receives only a deterministic candidate list (`id`, `domain`, `activity_name`,
+`original_wording_ar`, built by `select_weekly_followup_questions`) and may return only
+`{"id": "...", "wording_ar": "..."}` pairs. Every other field on the final
+`WeeklyFollowupQuestionResponse` (`domain`, `activity_id`, `progress_weight`, ...) is always
+copied from the matching deterministic candidate — Gemini structurally cannot supply a KB06 ID,
+activity ID, source ID, or domain that isn't already approved, so most of the required
+rejection rules ("unknown KB06 id", "unknown activity", "invalid domain") hold *by
+construction*, not just by post-hoc validation. The validator still explicitly rejects: count
+outside [5, 8] (via Pydantic `min_length`/`max_length`), duplicate selected ids, duplicate/
+near-duplicate wording (normalized-text comparison), and forbidden diagnostic/treatment/
+guarantee wording (same regex families as `validators.py`). On any failure, the fallback is the
+original KB06-worded candidates verbatim, capped to 8 — a path that cannot itself fail, since
+`select_weekly_followup_questions` already guarantees the deterministic pool exists.
+
+**Frozen questions**: the first validated generated/fallback set is persisted on the owned
+`weekly_plans` row. A conditional database update freezes only the first writer, and every caller
+reloads that stored winner before responding. The process-local `_CACHE` remains only a latency
+optimization. This preserves identical wording across refreshes, Render cold starts, process
+restarts, and multi-worker routing without changing deterministic KB06 scoring.
+
+**Activity explanation** context is built from a single KB02 `ActivityRecord` only — the
+context builder never queries the child, assessment, or session tables for this operation, so
+the "never send" list is satisfied structurally, not by redaction. The alternative-activity
+wording is grounded the same way action tips are: any `A\d{3,}`-shaped token in the response
+body must equal the requested `activity_id`, so Gemini cannot introduce a different activity.
+
+**Source-reference labels** (`app/ai/source_labels.py::build_source_references`) are resolved
+purely from the same `GroundingRecord.title`/`source_type` already assembled for the request's
+context — after validation succeeds (or the fallback is built), never from provider output.

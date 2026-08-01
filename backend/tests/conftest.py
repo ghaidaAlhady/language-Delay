@@ -10,7 +10,9 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.api.deps import get_db_session
+from app.ai.providers.disabled import DisabledAIProvider
+from app.ai.schemas import FallbackReason
+from app.api.deps import get_ai_provider, get_db_session
 from app.core.config import Settings, get_settings
 from app.core.rate_limit import limiter
 from app.main import app
@@ -45,6 +47,23 @@ def _reset_rate_limiter() -> None:
     before every test so one test's requests don't trip another's limit.
     """
     limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def _default_ai_provider_is_disabled() -> Iterator[None]:
+    """No routine test may depend on the local machine's real
+    `backend/.env` Gemini configuration (which may have live credentials
+    enabled from manual verification). Every test defaults to a safe,
+    network-free `DisabledAIProvider`; tests that need specific Gemini
+    behavior explicitly override `get_ai_provider` themselves (see e.g.
+    `test_ai_assistance_api.py`'s `_use_provider`), which simply replaces
+    this default for that test.
+    """
+    app.dependency_overrides[get_ai_provider] = lambda: DisabledAIProvider(
+        FallbackReason.DISABLED
+    )
+    yield
+    app.dependency_overrides.pop(get_ai_provider, None)
 
 
 @pytest_asyncio.fixture

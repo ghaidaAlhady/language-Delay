@@ -8,6 +8,8 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.activity_explanation import ActivityExplanationOrchestrator
+from app.ai.followup_questions import FollowupQuestionOrchestrator
 from app.ai.orchestration import AIAssistanceService
 from app.ai.protocols import AIProvider
 from app.core.config import Settings, get_settings
@@ -99,6 +101,20 @@ def get_ai_assistance_service(
         provider=provider,
         settings=settings,
     )
+
+
+def get_followup_question_orchestrator(
+    provider: Annotated[AIProvider, Depends(get_ai_provider)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+) -> FollowupQuestionOrchestrator:
+    return FollowupQuestionOrchestrator(provider=provider, settings=settings)
+
+
+def get_activity_explanation_orchestrator(
+    provider: Annotated[AIProvider, Depends(get_ai_provider)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+) -> ActivityExplanationOrchestrator:
+    return ActivityExplanationOrchestrator(provider=provider, settings=settings)
 
 
 async def get_current_user(

@@ -16,6 +16,9 @@ interface RenderOptions {
   initialEntry?: string;
   /** Extra routes (e.g. a redirect target) mounted alongside the main one. */
   additionalRoutes?: { path: string; element: ReactElement }[];
+  /** Pass a pre-seeded QueryClient (e.g. via `setQueryData`) to test
+   * cache-driven UI states without a network round trip. */
+  queryClient?: QueryClient;
 }
 
 export function renderWithProviders(
@@ -25,6 +28,9 @@ export function renderWithProviders(
     path = "/",
     initialEntry = "/",
     additionalRoutes = [],
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    }),
   }: RenderOptions = {},
 ): RenderResult {
   if (authenticated) {
@@ -32,10 +38,6 @@ export function renderWithProviders(
   } else {
     clearTokens();
   }
-
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
 
   return render(
     <QueryClientProvider client={queryClient}>

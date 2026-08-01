@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from pydantic import BaseModel
+
 from app.ai.schemas import AssistanceContext, AssistanceOperation, FallbackReason
 
 
@@ -12,6 +14,12 @@ class ProviderRequest:
     operation: AssistanceOperation
     prompt: str
     context: AssistanceContext
+    # The exact Pydantic model the provider's JSON output must satisfy for
+    # this operation — narrative wording (`AssistanceContent`) and the
+    # structured Milestone-3 operations (follow-up question wording, activity
+    # explanations) each have a different output shape, so this can't be
+    # hardcoded provider-side (see `providers/gemini.py`).
+    response_schema: type[BaseModel]
 
 
 class ProviderError(Exception):

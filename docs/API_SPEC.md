@@ -167,3 +167,84 @@ Successful provider wording and all provider/configuration fallback paths return
 `invalid_output`, `unsafe_output`, or `ungrounded_output`. Provider error text is never
 returned. Authentication, ownership, invalid resource state, request validation, and rate
 limit errors keep their normal HTTP semantics.
+
+As of Milestone 3, this response also includes `source_references` — human-readable,
+server-resolved labels for `content.source_ids` (see below), additive and backward-compatible.
+
+## Weekly-plan 70% reassessment eligibility (Milestone 3)
+
+`GET /api/v1/weekly-plans/{weekly_plan_id}/followup-questions` and
+`POST /api/v1/weekly-plans/{weekly_plan_id}/followup` both require the plan to be the child's
+current active plan **and** at least 70% of its activities completed
+(`completed_count * 100 >= total_activities * 70`, integer-safe; `0` total activities is never
+eligible) — replacing the previous 100%-only rule. Below the threshold, both return `400` with
+`details: {completed_count, total_activities, required_percent: 70,
+remaining_for_eligibility}`. This is enforced server-side only; there is no client-only bypass.
+
+## AI-varied weekly follow-up questions (Milestone 3)
+
+`GET /api/v1/weekly-plans/{weekly_plan_id}/followup-questions` (existing route, extended
+response) now optionally routes the deterministic KB06 candidate pool through Gemini for
+wording variation and/or subset selection (5–8 of the pool, never more, never fewer), with the
+same disabled-by-default / strict-validation / deterministic-fallback contract as the three
+Milestone 2 operations. Each `WeeklyFollowupQuestionResponse` gained `linked_activity_ids`,
+`source_ids`, and `prompt_version`; `WeeklyFollowupContextResponse` gained `generation_source`
+and `fallback_reason`. The generated/selected set is **frozen in the database** per `weekly_plan_id`, so repeated GETs, page reloads, and backend restarts return the identical set without calling Gemini again. `WeeklyPlanResponse.reassessment_started` exposes the persisted resume state.
+`POST /api/v1/weekly-plans/{weekly_plan_id}/followup` validates submitted answers against this
+exact frozen/shown set (not a freshly re-derived one), and remains idempotent — a duplicate
+submission is detected and short-circuited *before* any AI/context work, so it still returns
+the original follow-up even though the plan has since been deactivated.
+
+## "افهم أكثر" activity explanation (Milestone 3)
+
+| Method | Path | Authoritative resource |
+|---|---|---|
+| POST | `/api/v1/weekly-plan-activities/{activity_slot_id}/ai-explanation` | Owned weekly-plan activity slot |
+
+Same auth/ownership/rate-limit contract as the other AI endpoints. Context is built from the
+slot's one KB02 `ActivityRecord` only — no child, parent, or session data is ever read to
+build it. Response:
+
+```json
+{
+  "content": {
+    "activity_id": "A001",
+    "title_ar": "string",
+    "simple_explanation_ar": "string",
+    "purpose_ar": "string",
+    "steps_ar": ["string", "string", "string"],
+    "example_dialogue": {
+      "parent_text": "string",
+      "example_child_response": "string",
+      "supportive_parent_continuation": "string"
+    },
+    "alternative_ar": "string",
+    "source_ids": ["A001"]
+  },
+  "generation_source": "gemini",
+  "fallback_reason": null,
+  "prompt_version": "v2",
+  "source_references": [{"source_id": "A001", "label_ar": "اسم النشاط المعتمد", "category": "نشاط معتمد"}]
+}
+```
+
+`steps_ar` always has 3–5 items. `alternative_ar` must simplify the *same* approved activity
+(wording, materials, duration, choices, or prompting level) — it can never introduce a
+different activity ID. On any provider failure, the fallback is built directly from the KB02
+record's own fields (never a network call), so the parent always receives useful content.
+
+## Source-reference labels (Milestone 3)
+
+All four AI-assisted responses now include `source_references: [{source_id, label_ar,
+category}]` — resolved server-side from the same approved `GroundingRecord`s used to build the
+request context, assembled *after* the provider's output is validated (or the fallback is
+built), so Gemini can neither supply nor override a label. `source_ids` is unchanged for
+backward compatibility. An unresolvable ID (should not normally occur post-validation) gets the
+neutral label `"مصدر معتمد"`.
+
+
+## Deployment health
+
+- `GET /health` is a lightweight liveness/wake endpoint used by the frontend.
+- `GET /api/v1/health/ready` also executes `SELECT 1` and is the Render health-check path.
+- `WeeklyPlanResponse` includes `reassessment_started`, derived from persisted frozen questions.

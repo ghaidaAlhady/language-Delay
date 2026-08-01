@@ -149,3 +149,56 @@ development virtual environment used for final verification has `google-genai==1
 installed from the declared `requirements.txt` range. The adapter constructor and async
 close path were verified without making a generation request. Deployments must still run
 `pip install -r backend/requirements.txt`; no key or model is committed.
+
+## Current status addendum — Milestone 3
+
+Adds 70% reassessment eligibility, AI-varied weekly follow-up questions, "افهم أكثر" activity
+explanations, and the source-reference disclosure UX, on top of Milestone 2's architecture.
+
+Completed:
+
+- [x] 70% reassessment eligibility, backend-enforced, replacing the prior 100%-only rule
+      (`FollowupService._validate_plan_ready`, shared `weekly_plan_service.py::
+      is_reassessment_eligible`/`activities_remaining_for_eligibility` helpers used by both
+      the backend gate and a mirrored frontend util).
+- [x] AI-varied follow-up question wording/selection, grounded to a deterministic KB06
+      candidate pool by construction (Gemini can only pick a subset and reword — it never
+      supplies domain/activity/source IDs).
+- [x] Frozen question sets persisted atomically on `weekly_plans`, surviving reloads, Render cold starts, restarts, and another worker.
+- [x] "افهم أكثر" per-activity explanation endpoint, context built from a single KB02 record
+      only (no session data read at all for this operation).
+- [x] `source_references` on all four AI-assisted responses, plus a reusable, collapsed-by-
+      default `SourceReferenceDisclosure` frontend component replacing raw comma-separated IDs.
+- [x] `ProviderRequest` widened with a `response_schema` field so `providers/gemini.py` builds
+      the correct JSON schema per operation instead of assuming `AssistanceContent`.
+- [x] `FakeAIProvider` extended for both new operations (used by the E2E `AI_TEST_PROVIDER
+      =fake` path).
+- [x] Every routine backend test defaults to a `DisabledAIProvider` (autouse conftest fixture),
+      independent of the local machine's actual `backend/.env` Gemini configuration.
+- [x] No change to deterministic assessment scoring, severity, referral, activity/plan
+      selection, or KB06 progress computation.
+
+Known limitations/risks:
+
+- `WeeklyPlanResponse.reassessment_started` is derived from the persisted frozen question set, so the resume label survives tabs, reloads, and backend restarts.
+- During this session's verification, the full backend suite (`pytest` with no path filter)
+  took approximately 8 hours on one run on this Windows machine — matching the previously
+  documented single-process pytest stall risk. The Milestone-3-focused subset (110 tests)
+  reliably completes in under 6 minutes; prefer running bounded groups rather than the
+  unfiltered full suite until that stall is separately root-caused.
+- A pre-existing local-environment issue (not caused by this milestone) was found and fixed
+  during verification: this machine's `backend/.env` had live Gemini credentials enabled from
+  earlier manual verification, which could silently let routine tests consume real API quota.
+  Fixed via the autouse `DisabledAIProvider` conftest fixture above — routine tests no longer
+  depend on `.env` state at all.
+
+
+## Deployment readiness
+
+- [x] Hosted PostgreSQL support through `asyncpg` and normalized Neon-style URLs.
+- [x] Alembic migration for frozen follow-up question persistence.
+- [x] Netlify SPA configuration and Render Blueprint.
+- [x] Frontend cold-start gate for a sleeping free Render backend.
+- [x] Packaged Arabic font and structured PDF layout.
+- [x] Alternative activity fallback when the same-domain pool is already present in the plan.
+- [ ] A free Render/Neon deployment remains a beta/demo environment; production use requires an always-on service, database backups, operational monitoring, and a reviewed privacy/compliance posture.

@@ -31,5 +31,7 @@ export const queryKeys = {
       ["aiAssistance", "weeklyPlan", weeklyPlanId] as const,
     followup: (followupId: string) =>
       ["aiAssistance", "followup", followupId] as const,
+    activity: (activitySlotId: string) =>
+      ["aiAssistance", "activity", activitySlotId] as const,
   },
 } as const;

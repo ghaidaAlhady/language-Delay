@@ -1,11 +1,15 @@
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Skeleton } from "@/components/Skeleton";
+import { SourceReferenceDisclosure } from "@/components/SourceReferenceDisclosure";
 import type { AIAssistanceResponse, AIFallbackReason } from "@/types/api";
 
 const RETRYABLE_FALLBACKS: ReadonlySet<AIFallbackReason> = new Set([
   "timeout",
   "provider_error",
+  "provider_timeout",
+  "rate_limited",
+  "provider_unavailable",
   "invalid_output",
   "unsafe_output",
   "ungrounded_output",
@@ -16,6 +20,7 @@ interface AiAssistanceCardProps {
   data: AIAssistanceResponse | undefined;
   isPending: boolean;
   isError: boolean;
+  isFetching?: boolean;
   onRetry: () => void;
 }
 
@@ -24,9 +29,10 @@ export function AiAssistanceCard({
   data,
   isPending,
   isError,
+  isFetching = false,
   onRetry,
 }: AiAssistanceCardProps) {
-  if (isPending) {
+  if (isPending || isFetching) {
     return (
       <Card aria-label={heading} dir="rtl">
         <h2 className="font-semibold text-primary-900">{heading}</h2>
@@ -55,6 +61,9 @@ export function AiAssistanceCard({
 
   const isGemini = data.generation_source === "gemini";
   const retryable = data.fallback_reason !== null && RETRYABLE_FALLBACKS.has(data.fallback_reason);
+  const referenceById = new Map(
+    data.source_references.map((reference) => [reference.source_id, reference]),
+  );
 
   return (
     <Card aria-label={heading} dir="rtl" className="border border-secondary-300 bg-secondary-50/40">
@@ -76,16 +85,17 @@ export function AiAssistanceCard({
           {data.content.action_tips.map((tip) => (
             <li key={`${tip.source_id}-${tip.text}`}>
               • {tip.text}
-              <span className="ms-1 text-xs text-gray-500">({tip.source_id})</span>
+              <span className="ms-1 text-xs text-gray-500" title={tip.source_id}>
+                ({referenceById.get(tip.source_id)?.label_ar ?? "مصدر معتمد"})
+              </span>
             </li>
           ))}
         </ul>
       )}
-      {data.content.source_ids.length > 0 && (
-        <p className="mt-3 text-xs text-gray-500">
-          المصادر المعتمدة: {data.content.source_ids.join("، ")}
-        </p>
-      )}
+      <SourceReferenceDisclosure
+        sourceIds={data.content.source_ids}
+        sourceReferences={data.source_references}
+      />
       <p className="mt-4 border-t border-primary-100 pt-3 text-xs leading-6 text-gray-600">
         {data.content.disclaimer}
       </p>

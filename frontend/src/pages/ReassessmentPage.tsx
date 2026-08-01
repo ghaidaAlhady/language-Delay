@@ -13,6 +13,7 @@ import {
   useSubmitWeeklyFollowup,
   useWeeklyFollowupQuestions,
 } from "@/features/followup/useFollowups";
+import { isReassessmentEligible } from "@/features/weeklyPlan/eligibility";
 import { useActiveWeeklyPlan } from "@/features/weeklyPlan/useWeeklyPlan";
 import type { ResponseValue } from "@/types/api";
 import { getArabicErrorMessage } from "@/utils/errorMessages";
@@ -27,12 +28,11 @@ export function ReassessmentPage() {
   const activePlanQuery = useActiveWeeklyPlan(childId);
   const activePlan = activePlanQuery.data;
   const planMatchesRequest = !requestedPlanId || requestedPlanId === activePlan?.id;
-  const planIsComplete =
+  const planIsEligible =
     Boolean(activePlan?.is_active) &&
-    (activePlan?.total_activities ?? 0) > 0 &&
-    activePlan?.completed_count === activePlan?.total_activities;
+    isReassessmentEligible(activePlan?.completed_count ?? 0, activePlan?.total_activities ?? 0);
   const readyPlanId =
-    planMatchesRequest && planIsComplete ? activePlan?.id : undefined;
+    planMatchesRequest && planIsEligible ? activePlan?.id : undefined;
   const contextQuery = useWeeklyFollowupQuestions(readyPlanId);
   const submitFollowup = useSubmitWeeklyFollowup(
     childId ?? "",
@@ -94,11 +94,11 @@ export function ReassessmentPage() {
     );
   }
 
-  if (!planIsComplete) {
+  if (!planIsEligible) {
     return (
       <EmptyState
-        title="أكمل الخطة الأسبوعية أولًا"
-        description="تظهر المتابعة الأسبوعية بعد إكمال جميع أنشطة الخطة النشطة."
+        title="إعادة التقييم غير متاحة بعد"
+        description="يمكنك بدء إعادة التقييم بعد إكمال 70% من الأنشطة."
         action={
           childId && (
             <Link to={`/children/${childId}/weekly-plan`}>
@@ -186,6 +186,11 @@ export function ReassessmentPage() {
           </ul>
         </div>
       </Card>
+
+      <p className="text-xs leading-6 text-gray-600" role="note">
+        تمت صياغة الأسئلة بناءً على أنشطة الخطة الأسبوعية، بينما يعتمد حساب
+        النتيجة على معايير المتابعة المعتمدة.
+      </p>
 
       <div className="flex flex-col gap-4">
         {context.questions.map((question, index) => (

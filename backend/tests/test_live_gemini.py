@@ -9,6 +9,7 @@ from app.ai.prompts import build_prompt
 from app.ai.protocols import ProviderRequest
 from app.ai.providers.gemini import GeminiAIProvider
 from app.ai.schemas import (
+    AssistanceContent,
     AssistanceContext,
     AssistanceOperation,
     GroundingRecord,
@@ -59,6 +60,7 @@ async def test_live_gemini_structured_output_is_safe_and_grounded() -> None:
                 operation=context.operation,
                 prompt=build_prompt(context, "v1"),
                 context=context,
+                response_schema=AssistanceContent,
             )
         )
         content = parse_and_validate(raw_json, context)

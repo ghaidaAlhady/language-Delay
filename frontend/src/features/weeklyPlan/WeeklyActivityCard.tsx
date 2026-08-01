@@ -1,10 +1,15 @@
+import { useState } from "react";
+
+import { ActivityExplanationCard } from "@/components/ActivityExplanationCard";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { useActivityExplanation } from "@/features/ai/useAiAssistance";
 import type { WeeklyPlanActivityResponse } from "@/types/api";
 
 interface WeeklyActivityCardProps {
   slot: WeeklyPlanActivityResponse;
   isUpdating: boolean;
+  allowAlternative?: boolean;
   onToggleCompleted: () => void;
   onRequestAlternative: () => void;
 }
@@ -12,10 +17,13 @@ interface WeeklyActivityCardProps {
 export function WeeklyActivityCard({
   slot,
   isUpdating,
+  allowAlternative = true,
   onToggleCompleted,
   onRequestAlternative,
 }: WeeklyActivityCardProps) {
   const { activity } = slot;
+  const [explanationRequested, setExplanationRequested] = useState(false);
+  const explanationQuery = useActivityExplanation(slot.id, explanationRequested);
 
   return (
     <Card className={slot.completed ? "border-2 border-success-500 bg-success-50" : ""}>
@@ -60,10 +68,43 @@ export function WeeklyActivityCard({
         >
           {slot.completed ? "مكتمل" : "تم"}
         </Button>
-        <Button size="sm" variant="ghost" isLoading={isUpdating} onClick={onRequestAlternative}>
+        <Button
+          size="sm"
+          variant="ghost"
+          isLoading={isUpdating}
+          disabled={!allowAlternative}
+          title={
+            allowAlternative
+              ? "طلب نشاط آخر معتمد"
+              : "لا يمكن تغيير الأنشطة بعد بدء إعادة التقييم"
+          }
+          onClick={onRequestAlternative}
+        >
           طلب نشاط بديل
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={explanationRequested && explanationQuery.isFetching}
+          onClick={() => setExplanationRequested(true)}
+        >
+          افهم أكثر
+        </Button>
       </div>
+
+      {explanationRequested && (
+        <ActivityExplanationCard
+          data={explanationQuery.data}
+          isPending={explanationQuery.isPending}
+          isError={explanationQuery.isError}
+          isFetching={explanationQuery.isFetching}
+          onRetry={() => {
+            if (!explanationQuery.isFetching) {
+              void explanationQuery.refetch({ cancelRefetch: false });
+            }
+          }}
+        />
+      )}
     </Card>
   );
 }

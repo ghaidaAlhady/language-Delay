@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
+import { BackendAvailabilityGate } from "@/app/BackendAvailabilityGate";
 import { ToastProvider } from "@/components/ToastProvider";
 import { AuthProvider } from "@/features/auth/AuthProvider";
 
@@ -25,7 +26,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <AuthProvider>{children}</AuthProvider>
+        <BackendAvailabilityGate>
+          <AuthProvider>{children}</AuthProvider>
+        </BackendAvailabilityGate>
       </ToastProvider>
     </QueryClientProvider>
   );

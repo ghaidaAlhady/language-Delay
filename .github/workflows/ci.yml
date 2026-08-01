@@ -7,6 +7,13 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      SECRET_KEY: ci-only-secret-key-not-for-production
+      DATABASE_URL: sqlite+aiosqlite:///./ci.db
+      CORS_ORIGINS: '["http://127.0.0.1:5173","http://localhost:5173"]'
+      GEMINI_ENABLED: "false"
+      KNOWLEDGE_BASE_DIR: ../knowledge_base
     defaults:
       run:
         working-directory: backend
@@ -16,10 +23,35 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: backend/requirements-dev.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      - run: ruff check .
-      - run: pytest --cov=app --cov-report=term-missing
+      - run: ruff check app tests alembic
+      - run: mypy app
+      - run: pytest -k "not live" --cov=app --cov-report=term-missing
+      - run: pip check
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VITE_API_BASE_URL: http://127.0.0.1:8000
+      VITE_BACKEND_WAKE_TIMEOUT_MS: "1000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run test
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
 
   flutter:
     runs-on: ubuntu-latest

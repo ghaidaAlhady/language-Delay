@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import * as authApi from "@/api/auth";
@@ -7,13 +8,30 @@ import { clearTokens, getRefreshToken, setTokens } from "@/services/tokenStore";
 import type { UserResponse } from "@/types/api";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<UserResponse | null>(null);
 
-  const handleSessionExpired = useCallback(() => {
+  /**
+   * Every query and mutation in this application can contain private,
+   * account-scoped data. Clear the entire in-memory TanStack Query cache at
+   * every authentication boundary so data from one account can never be
+   * rendered while another account is active.
+   */
+  const clearAccountCache = useCallback(() => {
+    queryClient.clear();
+  }, [queryClient]);
+
+  const markUnauthenticated = useCallback(() => {
+    clearTokens();
+    clearAccountCache();
     setUser(null);
     setStatus("unauthenticated");
-  }, []);
+  }, [clearAccountCache]);
+
+  const handleSessionExpired = useCallback(() => {
+    markUnauthenticated();
+  }, [markUnauthenticated]);
 
   useEffect(() => {
     setSessionExpiredHandler(handleSessionExpired);
@@ -35,8 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const newAccessToken = await refreshAccessToken();
       if (cancelled) return;
       if (!newAccessToken) {
-        clearTokens();
-        setStatus("unauthenticated");
+        markUnauthenticated();
         return;
       }
       try {
@@ -46,8 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("authenticated");
       } catch {
         if (cancelled) return;
-        clearTokens();
-        setStatus("unauthenticated");
+        markUnauthenticated();
       }
     }
 
@@ -55,15 +71,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [markUnauthenticated]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const tokens = await authApi.login({ email, password });
-    setTokens(tokens.access_token, tokens.refresh_token);
-    const me = await authApi.getMe();
-    setUser(me);
-    setStatus("authenticated");
-  }, []);
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const tokens = await authApi.login({ email, password });
+
+      // A successful login may switch accounts in the same browser tab.
+      // Remove all data cached under the previous account before installing
+      // the new credentials or rendering the new authenticated session.
+      clearAccountCache();
+      setTokens(tokens.access_token, tokens.refresh_token);
+
+      try {
+        const me = await authApi.getMe();
+        setUser(me);
+        setStatus("authenticated");
+      } catch (error) {
+        markUnauthenticated();
+        throw error;
+      }
+    },
+    [clearAccountCache, markUnauthenticated],
+  );
 
   const register = useCallback(
     async (email: string, password: string, displayName: string) => {
@@ -78,18 +108,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (refreshToken) await authApi.logout(refreshToken);
     } finally {
-      clearTokens();
-      setUser(null);
-      setStatus("unauthenticated");
+      markUnauthenticated();
     }
-  }, []);
+  }, [markUnauthenticated]);
 
   const deleteAccount = useCallback(async () => {
-    await authApi.deleteAccount();
-    clearTokens();
-    setUser(null);
-    setStatus("unauthenticated");
-  }, []);
+    try {
+      await authApi.deleteAccount();
+    } finally {
+      // Clear local credentials and all private cached data even if the
+      // network response is interrupted after the backend processed deletion.
+      markUnauthenticated();
+    }
+  }, [markUnauthenticated]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ status, user, login, register, logout, deleteAccount }),

@@ -12,6 +12,7 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import JSON
 
 from app.core.database import Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
 
@@ -26,6 +27,22 @@ class WeeklyPlan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Frozen weekly follow-up question set. This must live in the database
+    # rather than process memory because free hosting may restart or scale the
+    # API between the parent opening and submitting reassessment.
+    followup_question_context: Mapped[list[dict] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    followup_generation_source: Mapped[str | None] = mapped_column(
+        String(40), nullable=True
+    )
+    followup_fallback_reason: Mapped[str | None] = mapped_column(
+        String(40), nullable=True
+    )
+    followup_questions_frozen_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime, nullable=True
+    )
 
 
 class WeeklyPlanActivity(UUIDPrimaryKeyMixin, TimestampMixin, Base):

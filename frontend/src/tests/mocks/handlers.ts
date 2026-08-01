@@ -7,6 +7,7 @@
 import { HttpResponse, http } from "msw";
 
 import {
+  fixtureActivityExplanation,
   fixtureAIAssistance,
   fixtureAssessmentCompleted,
   fixtureChild,
@@ -21,6 +22,7 @@ import {
 const BASE = import.meta.env.VITE_API_BASE_URL;
 
 export const handlers = [
+  http.get(`${BASE}/health`, () => HttpResponse.json({ status: "ok" })),
   http.post(`${BASE}/api/v1/auth/refresh`, () =>
     HttpResponse.json({ access_token: "test-access", refresh_token: "test-refresh" }),
   ),
@@ -59,5 +61,8 @@ export const handlers = [
   ),
   http.post(`${BASE}/api/v1/followups/:followupId/ai-summary`, () =>
     HttpResponse.json(fixtureAIAssistance),
+  ),
+  http.post(`${BASE}/api/v1/weekly-plan-activities/:slotId/ai-explanation`, () =>
+    HttpResponse.json(fixtureActivityExplanation),
   ),
 ];

@@ -127,13 +127,11 @@ KB02's file order, starving the "alternative activity" feature for that domain.
 acceptable for SQLite/single-process MVP.
 
 ### PDF Arabic font
-No font file is committed (licensing — `CLAUDE_CODE_PROMPT.md` explicitly forbids this).
-`PDF_ARABIC_FONT_PATH` (env var) lets a deployment point at a Unicode TTF (e.g. Amiri, Noto
-Naskh Arabic) with real Arabic glyph coverage; `render_report_pdf` registers it with
-ReportLab if present. Without it, PDF generation still produces a real, valid PDF file (never
-a fake/placeholder response) — Arabic text just won't render legibly until a font is
-configured. Arabic shaping/bidi reordering (`arabic_reshaper` + `python-bidi`) is always
-applied regardless of font.
+The repository includes the open-licensed Tajawal Regular font together with its OFL license
+under `backend/assets/fonts/`. `render_report_pdf` embeds that packaged font by default, so
+Arabic output does not depend on fonts installed on the host. `PDF_ARABIC_FONT_PATH` remains
+an optional operator override. Arabic shaping/bidi reordering (`arabic_reshaper` +
+`python-bidi`) and text sanitization are applied before ReportLab draws each wrapped RTL line.
 
 ### Refresh-token storage and revocation
 Refresh tokens are opaque, high-entropy random strings (`secrets.token_urlsafe(48)`) — never
@@ -216,3 +214,26 @@ an unconfigured origin is not; wildcard-with-credentials is asserted absent).
 9. **No retry loop in application orchestration.** Retry count and timeout belong to the
    official provider HTTP configuration. The orchestration performs one logical generation
    and then falls back, avoiding duplicate uncontrolled calls.
+
+
+## Deployment-readiness decisions (2026-08-01)
+
+1. **Hosted persistence uses PostgreSQL, local development may use SQLite.** Production
+   startup rejects SQLite because a free web-service filesystem is ephemeral. Common Neon
+   connection strings are normalized to SQLAlchemy's `postgresql+asyncpg` dialect.
+2. **Frozen reassessment questions are database state.** The first valid 5–8 question set is
+   atomically stored on `weekly_plans`; the process-local cache is only an optimization. This
+   preserves wording and resume behavior across refreshes, restarts, and multiple workers.
+3. **Alternative activities freeze with reassessment.** Before reassessment begins, an
+   exhausted unused pool may reuse a different approved same-domain activity rather than
+   fail with an unavoidable 409. Once questions are frozen, replacements are blocked so the
+   shown questions remain grounded to the plan that was assessed.
+4. **Free-backend wake-up is explicit UX.** The frontend probes `/health` before mounting
+   authentication and waits through a bounded hosted cold-start window. It never treats a
+   sleeping demo backend as immediate credential failure.
+5. **Production fails closed on unsafe configuration.** `APP_ENV=production` requires a
+   persistent PostgreSQL URL, a strong random secret, and one or more exact HTTPS CORS
+   origins. Wildcards, paths, credentials, HTTP origins, queries, and fragments are rejected.
+6. **Deployment target is beta/demo.** Netlify + Render + Neon is prepared for demonstration
+   and controlled testing. Always-on hosting, backups, monitoring, incident response, and a
+   formal privacy/compliance review remain prerequisites for production healthcare use.

@@ -104,6 +104,44 @@ def test_questions_require_completed_active_plan(client: TestClient) -> None:
     assert response.status_code == 400
 
 
+def test_questions_available_at_70_percent_completion_not_required_at_100(
+    client: TestClient,
+) -> None:
+    headers = _auth_headers(client, "parent@example.com")
+    child_id = _create_child(client, headers)
+    plan = _create_plan(client, headers, child_id, complete=False)
+    slots = plan["activities"]
+    assert len(slots) == 14
+
+    # 9/14 = 64.3% — still below the 70% threshold.
+    for slot in slots[:9]:
+        plan = client.patch(
+            f"/api/v1/weekly-plan-activities/{slot['id']}",
+            json={"completed": True},
+            headers=headers,
+        ).json()
+    response = client.get(
+        f"/api/v1/weekly-plans/{plan['id']}/followup-questions",
+        headers=headers,
+    )
+    assert response.status_code == 400
+
+    # 10/14 = 71.4% — now eligible without completing all 14.
+    plan = client.patch(
+        f"/api/v1/weekly-plan-activities/{slots[9]['id']}",
+        json={"completed": True},
+        headers=headers,
+    ).json()
+    response = client.get(
+        f"/api/v1/weekly-plans/{plan['id']}/followup-questions",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    context = response.json()
+    assert context["completed_count"] == 10
+    assert context["total_activities"] == 14
+
+
 def test_questions_are_kb06_plan_specific_and_not_kb05(client: TestClient) -> None:
     headers = _auth_headers(client, "parent@example.com")
     child_id = _create_child(client, headers)

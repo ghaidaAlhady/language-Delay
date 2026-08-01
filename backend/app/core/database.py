@@ -52,7 +52,18 @@ class UTCDateTime(TypeDecorator[datetime]):
 
 connect_args = {"check_same_thread": False} if settings.is_sqlite else {}
 
-engine = create_async_engine(settings.database_url, echo=False, connect_args=connect_args)
+engine_options: dict[str, Any] = {
+    "echo": False,
+    "connect_args": connect_args,
+    "pool_pre_ping": True,
+}
+if settings.is_postgresql:
+    # Hosted PostgreSQL connections may be recycled by the provider while the
+    # free Render service sleeps. Pre-ping plus a short recycle window avoids
+    # handing a stale connection to the first request after wake-up.
+    engine_options["pool_recycle"] = 300
+
+engine = create_async_engine(settings.database_url, **engine_options)
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 if settings.is_sqlite:

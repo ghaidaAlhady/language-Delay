@@ -17,11 +17,13 @@ from app.ai.protocols import (
     ProviderUnavailableError,
 )
 from app.ai.schemas import (
+    AssistanceContent,
     AssistanceContext,
     AssistanceResponse,
     FallbackReason,
     GenerationSource,
 )
+from app.ai.source_labels import build_source_references
 from app.ai.validators import (
     InvalidOutputError,
     UngroundedOutputError,
@@ -87,6 +89,7 @@ class AIAssistanceService:
                 operation=context.operation,
                 prompt=prompt,
                 context=context,
+                response_schema=AssistanceContent,
             )
             try:
                 raw_json = await self.provider.generate(request)
@@ -129,4 +132,7 @@ class AIAssistanceService:
             generation_source=source,
             fallback_reason=reason,
             prompt_version=self.settings.gemini_prompt_version,
+            source_references=build_source_references(
+                content.source_ids, context.approved_sources
+            ),
         )

@@ -23,6 +23,7 @@ describe("apiRequest", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -97,6 +98,31 @@ describe("apiRequest", () => {
     await expect(apiRequest("/api/v1/children")).rejects.toBeInstanceOf(TimeoutError);
   });
 
+
+  it("honors a longer per-request timeout for AI calls", async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        signal = init?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => {
+            reject(new DOMException("aborted", "AbortError"));
+          });
+        });
+      }),
+    );
+
+    const request = apiRequest("/api/v1/ai-test", { timeoutMs: 30_000 });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(signal?.aborted).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(request).rejects.toBeInstanceOf(TimeoutError);
+    vi.useRealTimers();
+  });
+
   it("on 401, refreshes the access token once and retries the original request", async () => {
     setTokens("expired-access", "refresh-1");
     const fetchMock = vi
@@ -145,6 +171,7 @@ describe("apiRequest", () => {
 
 describe("apiRequestBlob", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 

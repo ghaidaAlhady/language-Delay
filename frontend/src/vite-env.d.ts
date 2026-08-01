@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string;
+  readonly VITE_BACKEND_WAKE_TIMEOUT_MS?: string;
 }
 
 interface ImportMeta {

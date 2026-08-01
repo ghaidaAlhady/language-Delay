@@ -25,6 +25,28 @@ DAYS_PER_WEEK = 7
 ACTIVITIES_PER_DAY = 2
 TOTAL_ACTIVITIES = DAYS_PER_WEEK * ACTIVITIES_PER_DAY
 
+REASSESSMENT_ELIGIBILITY_PERCENT = 70
+
+
+def completion_stats(slots: list[WeeklyPlanActivity]) -> tuple[int, int]:
+    """(completed_count, total_activities) for a plan's activity slots."""
+    return sum(1 for slot in slots if slot.completed), len(slots)
+
+
+def is_reassessment_eligible(completed: int, total: int) -> bool:
+    """Integer-safe `completed/total >= 70%`; zero activities is never eligible."""
+    if total == 0:
+        return False
+    return completed * 100 >= total * REASSESSMENT_ELIGIBILITY_PERCENT
+
+
+def activities_remaining_for_eligibility(completed: int, total: int) -> int:
+    """How many more completions are needed to reach the 70% threshold."""
+    if total == 0:
+        return 0
+    needed = -(-total * REASSESSMENT_ELIGIBILITY_PERCENT // 100)  # ceil
+    return max(0, needed - completed)
+
 
 @dataclass
 class WeeklyPlanService:
@@ -156,6 +178,10 @@ class WeeklyPlanService:
     async def suggest_alternative(self, slot: WeeklyPlanActivity) -> WeeklyPlanActivity:
         plan = await weekly_plan_repository.get_by_id(self.session, slot.weekly_plan_id)
         assert plan is not None
+        if plan.followup_question_context:
+            raise ConflictError(
+                "Activities cannot be replaced after weekly reassessment has started."
+            )
         assessment = await assessment_repository.get_by_id(self.session, plan.assessment_id)
         assert assessment is not None
 
@@ -164,17 +190,26 @@ class WeeklyPlanService:
             s.activity_id
             for s in await weekly_plan_repository.get_activities(self.session, plan.id)
         }
-        candidates = [
-            a
-            for a in self.kb.get_activities_for_age(
+        same_domain_candidates = [
+            activity
+            for activity in self.kb.get_activities_for_age(
                 assessment.age_at_assessment, current_activity.domain
             )
-            if a.id not in existing_ids
+            if activity.id != current_activity.id
         ]
-        if not candidates:
+        if not same_domain_candidates:
             raise ConflictError(
                 "No alternative activity is available for this domain and age."
             )
+
+        # Prefer a not-yet-used activity so the plan remains varied. Some
+        # high-support plans already contain every KB02 activity in a domain;
+        # in that legitimate case, reuse a different approved same-domain
+        # activity instead of exposing an unavoidable 409 to the parent.
+        unused = [
+            activity for activity in same_domain_candidates if activity.id not in existing_ids
+        ]
+        candidates = unused or same_domain_candidates
 
         updated = await weekly_plan_repository.set_activity_kb_id(
             self.session, slot, activity_id=candidates[0].id
@@ -195,8 +230,7 @@ class WeeklyPlanService:
             )
             for slot in slots
         ]
-        completed_count = sum(1 for a in activity_responses if a.completed)
-        total = len(activity_responses)
+        completed_count, total = completion_stats(slots)
         adherence_percent = round((completed_count / total * 100) if total else 0.0, 2)
 
         return WeeklyPlanResponse(
@@ -208,5 +242,6 @@ class WeeklyPlanService:
             total_activities=total,
             completed_count=completed_count,
             adherence_percent=adherence_percent,
+            reassessment_started=bool(plan.followup_question_context),
             activities=activity_responses,
         )

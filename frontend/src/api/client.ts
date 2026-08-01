@@ -7,11 +7,13 @@
  * (network, timeout, non-2xx) to a typed error.
  */
 import { ApiError, NetworkError, TimeoutError } from "@/api/ApiError";
+import { API_BASE_URL } from "@/config/runtime";
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "@/services/tokenStore";
 import type { TokenResponse } from "@/types/api";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const REQUEST_TIMEOUT_MS = 15_000;
+const BASE_URL = API_BASE_URL;
+export const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+export const AI_REQUEST_TIMEOUT_MS = 30_000;
 
 let sessionExpiredHandler: (() => void) | null = null;
 
@@ -56,6 +58,8 @@ export interface RequestOptions {
   query?: Record<string, string | number | boolean | undefined>;
   /** Skip attaching the bearer token and skip the 401 refresh-retry dance (used by register/login/refresh themselves). */
   skipAuth?: boolean;
+  /** Optional per-request timeout. AI endpoints use a longer bounded budget. */
+  timeoutMs?: number;
 }
 
 interface InternalOptions extends RequestOptions {
@@ -92,6 +96,7 @@ async function parseErrorBody(response: Response): Promise<ErrorBody> {
 
 async function doFetch(path: string, options: InternalOptions): Promise<Response> {
   const { method = "GET", body, query, skipAuth = false } = options;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -99,7 +104,7 @@ async function doFetch(path: string, options: InternalOptions): Promise<Response
   if (token && !skipAuth) headers.Authorization = `Bearer ${token}`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     return await fetch(buildUrl(path, query), {

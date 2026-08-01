@@ -4,12 +4,15 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from pydantic import BaseModel
+
 from app.ai.protocols import (
     ProviderError,
     ProviderRequest,
     ProviderTimeoutError,
+    ProviderUnavailableError,
 )
-from app.ai.schemas import AssistanceContent
+from app.ai.schemas import FallbackReason
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -82,12 +85,14 @@ def _filter_supported_json_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return filtered
 
 
-def _build_generate_content_config(types: Any) -> Any:
+def _build_generate_content_config(
+    types: Any, response_schema: type[BaseModel]
+) -> Any:
     """Build an SDK config that uses native JSON Schema, with no tools or AFC."""
     return types.GenerateContentConfig(
         response_mime_type="application/json",
         response_json_schema=_filter_supported_json_schema(
-            AssistanceContent.model_json_schema()
+            response_schema.model_json_schema()
         ),
         automatic_function_calling=types.AutomaticFunctionCallingConfig(
             disable=True
@@ -95,11 +100,36 @@ def _build_generate_content_config(types: Any) -> Any:
     )
 
 
+def _classify_provider_failure(exc: Exception) -> FallbackReason:
+    """Map SDK failures to a safe application category without exposing text."""
+    code = getattr(exc, "code", None)
+    status = getattr(exc, "status", None)
+    raw_message = getattr(exc, "message", None)
+    message = raw_message.casefold() if isinstance(raw_message, str) else ""
+
+    if code in {408, 504} or status == "DEADLINE_EXCEEDED":
+        return FallbackReason.PROVIDER_TIMEOUT
+    if code == 401 or status == "UNAUTHENTICATED":
+        return FallbackReason.AUTHENTICATION_ERROR
+    if code == 403 or status == "PERMISSION_DENIED":
+        return FallbackReason.PERMISSION_ERROR
+    if code == 404 or status == "NOT_FOUND":
+        return FallbackReason.MODEL_UNAVAILABLE
+    if code == 429 or status == "RESOURCE_EXHAUSTED":
+        if "quota" in message or "free_tier" in message:
+            return FallbackReason.QUOTA_EXHAUSTED
+        return FallbackReason.RATE_LIMITED
+    if code in {502, 503} or status in {"UNAVAILABLE", "INTERNAL", "ABORTED"}:
+        return FallbackReason.PROVIDER_UNAVAILABLE
+    return FallbackReason.PROVIDER_ERROR
+
+
 def _safe_provider_error_metadata(exc: Exception) -> dict[str, int | str]:
     """Classify an SDK error without retaining provider text or request data."""
+    reason = _classify_provider_failure(exc)
     metadata: dict[str, int | str] = {
         "provider": "gemini",
-        "provider_error_kind": "provider_error",
+        "provider_error_kind": reason.value,
     }
     code = getattr(exc, "code", None)
     if isinstance(code, int) and 100 <= code <= 599:
@@ -144,37 +174,63 @@ class GeminiAIProvider:
         self._model = model
         self._timeout_seconds = timeout_seconds
         self._types: Any = types
+        self._max_retries = max_retries
+        self._retry_delay_seconds = 0.25
         self._client: Any = genai.Client(
             api_key=api_key,
             http_options=types.HttpOptions(
                 timeout=timeout_seconds * 1000,
-                retry_options=types.HttpRetryOptions(
-                    attempts=max_retries + 1
-                ),
+                # Application code owns retries so quota/auth/model failures
+                # are never retried blindly by the SDK.
+                retry_options=types.HttpRetryOptions(attempts=1),
             ),
         )
 
     async def generate(self, request: ProviderRequest) -> str:
         try:
             async with asyncio.timeout(self._timeout_seconds):
-                response = await self._client.aio.models.generate_content(
-                    model=self._model,
-                    contents=request.prompt,
-                    config=_build_generate_content_config(self._types),
-                )
+                response = await self._generate_with_retries(request)
         except TimeoutError as exc:
             raise ProviderTimeoutError from exc
-        except Exception as exc:
-            logger.warning(
-                "gemini_generate_failed",
-                **_safe_provider_error_metadata(exc),
-            )
-            # Do not retain raw SDK error details in the application exception.
-            raise ProviderError from None
 
         if not response.text:
             raise ProviderError
         return response.text
+
+    async def _generate_with_retries(self, request: ProviderRequest) -> Any:
+        for attempt in range(self._max_retries + 1):
+            try:
+                return await self._client.aio.models.generate_content(
+                    model=self._model,
+                    contents=request.prompt,
+                    config=_build_generate_content_config(
+                        self._types, request.response_schema
+                    ),
+                )
+            except Exception as exc:
+                reason = _classify_provider_failure(exc)
+                logger.warning(
+                    "gemini_generate_failed",
+                    **_safe_provider_error_metadata(exc),
+                    retry_attempt=attempt,
+                )
+
+                # Only a temporary provider outage is retried. Quota, auth,
+                # permission, model, schema, and rate-limit failures fall back
+                # immediately so the browser receives a response in time.
+                if (
+                    reason is FallbackReason.PROVIDER_UNAVAILABLE
+                    and attempt < self._max_retries
+                ):
+                    await asyncio.sleep(self._retry_delay_seconds * (attempt + 1))
+                    continue
+                if reason is FallbackReason.PROVIDER_TIMEOUT:
+                    raise ProviderTimeoutError from exc
+                if reason is not FallbackReason.PROVIDER_ERROR:
+                    raise ProviderUnavailableError(reason) from None
+                raise ProviderError from None
+
+        raise ProviderError
 
     async def aclose(self) -> None:
         await self._client.aio.aclose()

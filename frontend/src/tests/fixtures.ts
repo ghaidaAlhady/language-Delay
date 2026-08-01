@@ -1,4 +1,5 @@
 import type {
+  ActivityExplanationResponse,
   AIAssistanceResponse,
   AssessmentQuestionResponse,
   AssessmentResponse,
@@ -28,6 +29,28 @@ export const fixtureAIAssistance: AIAssistanceResponse = {
   generation_source: "gemini",
   fallback_reason: null,
   prompt_version: "v1",
+  source_references: [{ source_id: "A001", label_ar: "أكمل الجملة", category: "نشاط معتمد" }],
+};
+
+export const fixtureActivityExplanation: ActivityExplanationResponse = {
+  content: {
+    activity_id: "A001",
+    title_ar: "أكمل الجملة",
+    simple_explanation_ar: "شرح مبسط للنشاط.",
+    purpose_ar: "دعم اللغة التعبيرية.",
+    steps_ar: ["جهّزوا الأدوات.", "ابدأوا بخطوة بسيطة.", "كرروا النشاط بانتظام."],
+    example_dialogue: {
+      parent_text: "هيا نكمل الجملة معًا.",
+      example_child_response: "قد يشارك الطفل بمحاولة بسيطة — هذا مثال محتمل فقط.",
+      supportive_parent_continuation: "أحسنت! لنكرر ذلك مرة أخرى.",
+    },
+    alternative_ar: "بسّطوا النشاط بتقليل عدد الخيارات إذا لم يستجب الطفل.",
+    source_ids: ["A001"],
+  },
+  generation_source: "gemini",
+  fallback_reason: null,
+  prompt_version: "v2",
+  source_references: [{ source_id: "A001", label_ar: "أكمل الجملة", category: "نشاط معتمد" }],
 };
 
 export const fixtureUser: UserResponse = {
@@ -154,6 +177,7 @@ export const fixtureWeeklyPlan: WeeklyPlanResponse = {
   total_activities: 2,
   completed_count: 0,
   adherence_percent: 0,
+  reassessment_started: false,
   activities: [
     {
       id: "slot-1",
@@ -252,6 +276,11 @@ export const fixtureWeeklyFollowupContext: WeeklyFollowupContextResponse = {
       required: true,
       progress_weight: 1,
       fallback_used: false,
+      linked_activity_ids: [activity.activity.id],
+      source_ids: [activity.activity.id, `K6R${index + 1}`],
+      prompt_version: "v2",
     };
   }),
+  generation_source: "gemini",
+  fallback_reason: null,
 };

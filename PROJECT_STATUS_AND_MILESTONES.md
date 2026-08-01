@@ -108,3 +108,44 @@ strictly validated, and fail to deterministic Arabic wording.
 
 See `MILESTONE_2_GEMINI_IMPLEMENTATION_REPORT.md` and the latest `PROGRESS.md` handoff for
 the exact verification/commit state. Do not start another milestone automatically.
+
+## Milestone 3 — AI-guided weekly reassessment, activity explanations, source UX
+
+Implemented and verified on `feature/web-frontend`, not staged, committed, or pushed. Adds:
+70% reassessment eligibility (replacing the prior 100%-only rule, backend-enforced); AI-varied
+weekly follow-up question wording/selection, grounded to a deterministic KB06 candidate pool
+by construction and frozen durably per plan in the database; a per-activity "افهم أكثر" AI
+explanation built from KB02 data only (no session data read); and a reusable, collapsed-by-
+default source-reference disclosure replacing raw comma-separated source IDs across all
+AI-assisted cards. The persisted question set and `reassessment_started` response field now
+survive reloads, backend restarts, and multi-worker deployment.
+
+The deterministic backend remains the sole authority for scoring, severity, referral,
+activity/plan selection, and KB06 progress — Gemini's role in both new operations is narrower
+than Milestone 2's: it may only select among and reword already-approved deterministic data,
+never supply an ID, domain, or fact itself. Both operations reuse Milestone 2's disabled-by-
+default / fake-provider-in-E2E / strict-validation-with-deterministic-fallback pipeline.
+
+Backend: focused suite 110/110, full suite 252/252 (after fixing a test-isolation issue found
+during verification — see `PROGRESS.md`), `mypy`/`ruff`/`pip check` clean, zero live Gemini
+calls in the final runs. Frontend: 143/143 Vitest, lint/build clean. E2E: new focused spec
+3/3, full 29-test desktop suite 29/29. See `PROGRESS.md` for the full file list, the two
+application bugs found and fixed during this milestone, and known risks. Do not start another
+milestone automatically.
+
+## Deployment readiness milestone
+
+Status: **implemented in the deployment-ready package; local full-suite verification required before commit**.
+
+Scope completed:
+
+- Netlify frontend configuration with SPA routing and security headers.
+- Render backend Blueprint with migrations, readiness checks, and secret placeholders.
+- Neon/PostgreSQL async database compatibility.
+- Durable frozen reassessment questions and backend-driven resume state.
+- Free-backend cold-start UX.
+- Alternative activity conflict fallback.
+- Improved Arabic PDF report layout.
+- Deployment and environment-variable documentation.
+
+The target is a public beta/demo, not a production healthcare service. Production use still requires an always-on backend, managed backups, monitoring, incident response, and a formal privacy/compliance review.

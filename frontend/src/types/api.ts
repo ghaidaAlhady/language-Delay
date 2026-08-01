@@ -221,6 +221,7 @@ export interface WeeklyPlanResponse {
   total_activities: number;
   completed_count: number;
   adherence_percent: number;
+  reassessment_started: boolean;
   activities: WeeklyPlanActivityResponse[];
 }
 
@@ -242,11 +243,16 @@ export interface WeeklyFollowupQuestionResponse {
   activity_id: string;
   activity_name: string;
   expected_behavior: string;
+  /** Deterministic KB06 wording, or Gemini-varied wording that passed
+   * grounding/safety validation — scoring only ever depends on `id`. */
   question: string;
   response_type: string;
   required: boolean;
   progress_weight: number;
   fallback_used: boolean;
+  linked_activity_ids: string[];
+  source_ids: string[];
+  prompt_version: string;
 }
 
 export interface WeeklyFollowupContextResponse {
@@ -259,6 +265,8 @@ export interface WeeklyFollowupContextResponse {
   total_activities: number;
   weekly_goals: string[];
   questions: WeeklyFollowupQuestionResponse[];
+  generation_source: AIGenerationSource;
+  fallback_reason: AIFallbackReason | null;
 }
 
 export interface WeeklyFollowupSubmissionRequest {
@@ -290,6 +298,13 @@ export type AIFallbackReason =
   | "not_configured"
   | "empty_context"
   | "timeout"
+  | "provider_timeout"
+  | "quota_exhausted"
+  | "rate_limited"
+  | "authentication_error"
+  | "permission_error"
+  | "model_unavailable"
+  | "provider_unavailable"
   | "provider_error"
   | "invalid_output"
   | "unsafe_output"
@@ -309,9 +324,45 @@ export interface AIAssistanceContent {
   source_ids: string[];
 }
 
+/** Human-readable, KB-resolved label for a `source_id` — always assembled
+ * server-side, never provider-supplied. */
+export interface AISourceReference {
+  source_id: string;
+  label_ar: string;
+  category: string;
+}
+
 export interface AIAssistanceResponse {
   content: AIAssistanceContent;
   generation_source: AIGenerationSource;
   fallback_reason: AIFallbackReason | null;
   prompt_version: string;
+  source_references: AISourceReference[];
+}
+
+// ---- "افهم أكثر" activity explanation ---------------------------------
+
+export interface AIExampleDialogue {
+  parent_text: string;
+  example_child_response: string;
+  supportive_parent_continuation: string;
+}
+
+export interface ActivityExplanationContent {
+  activity_id: string;
+  title_ar: string;
+  simple_explanation_ar: string;
+  purpose_ar: string;
+  steps_ar: string[];
+  example_dialogue: AIExampleDialogue;
+  alternative_ar: string;
+  source_ids: string[];
+}
+
+export interface ActivityExplanationResponse {
+  content: ActivityExplanationContent;
+  generation_source: AIGenerationSource;
+  fallback_reason: AIFallbackReason | null;
+  prompt_version: string;
+  source_references: AISourceReference[];
 }

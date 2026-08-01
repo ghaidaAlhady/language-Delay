@@ -12,7 +12,8 @@ from app.core.database import UTCDateTime
 from app.models import Base
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# Alembic uses ConfigParser interpolation; escape percent-encoded URL bytes.
+config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

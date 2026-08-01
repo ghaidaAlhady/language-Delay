@@ -5,7 +5,12 @@ from reportlab.pdfbase.ttfonts import TTFont
 from app.core.config import Settings
 from app.rag.schemas import Domain, ReferralGuidance, Severity
 from app.schemas.report import ReportDomainSummary, ReportResponse
-from app.services.pdf_service import _resolve_font_path, _shape, render_report_pdf
+from app.services.pdf_service import (
+    _resolve_font_path,
+    _sanitize_text,
+    _shape,
+    render_report_pdf,
+)
 
 
 def _sample_report() -> ReportResponse:
@@ -74,3 +79,11 @@ def test_missing_configured_font_uses_packaged_arabic_font(
     broken_settings = settings.model_copy(update={"pdf_arabic_font_path": "/no/such/font.ttf"})
     pdf_bytes = render_report_pdf(_sample_report(), broken_settings)
     assert pdf_bytes.startswith(b"%PDF-")
+
+
+def test_pdf_text_sanitizer_removes_direction_controls_and_risky_symbols() -> None:
+    cleaned = _sanitize_text("نتيجة‏ — دعم • مستمر")
+    assert "\u200f" not in cleaned
+    assert "—" not in cleaned
+    assert "•" not in cleaned
+    assert cleaned == "نتيجة - دعم - مستمر"
