@@ -19,16 +19,34 @@ depends_on: str | Sequence[str] | None = None
 _NAMING_CONVENTION = {
     "uq": "uq_%(table_name)s_%(column_0_name)s",
 }
+_SQLITE_CURRENT_ASSESSMENT_UQ = "uq_followups_current_assessment_id"
+
+
+def _current_assessment_unique_constraint_name() -> str:
+    """Resolve the legacy constraint name across PostgreSQL and SQLite."""
+    matches = [
+        constraint
+        for constraint in sa.inspect(op.get_bind()).get_unique_constraints("followups")
+        if constraint["column_names"] == ["current_assessment_id"]
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            "Expected exactly one unique constraint on "
+            "followups.current_assessment_id."
+        )
+
+    # PostgreSQL names an otherwise unnamed UNIQUE constraint itself. SQLite
+    # reflects it without a name, and batch mode applies our naming convention.
+    return matches[0]["name"] or _SQLITE_CURRENT_ASSESSMENT_UQ
 
 
 def upgrade() -> None:
     """Add exact plan provenance while retaining legacy follow-up rows."""
+    current_assessment_constraint = _current_assessment_unique_constraint_name()
     with op.batch_alter_table(
         "followups", recreate="always", naming_convention=_NAMING_CONVENTION
     ) as batch_op:
-        batch_op.drop_constraint(
-            "uq_followups_current_assessment_id", type_="unique"
-        )
+        batch_op.drop_constraint(current_assessment_constraint, type_="unique")
         batch_op.alter_column(
             "current_assessment_id",
             existing_type=sa.String(),
