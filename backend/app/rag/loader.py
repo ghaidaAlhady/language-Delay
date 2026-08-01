@@ -1,4 +1,4 @@
-"""Reads and structurally validates the KB01-KB05 Excel workbooks.
+"""Reads and structurally validates the KB01-KB05 Excel workbooks and KB06 JSON.
 
 This module only deals with raw sheet/column validation and produces plain
 ``dict`` rows per sheet. Typed, semantically validated records are built from
@@ -6,6 +6,7 @@ these rows in :mod:`app.rag.normalizer`.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -134,3 +135,19 @@ def load_all_workbooks(kb_dir: Path) -> dict[str, dict[str, list[dict[str, Any]]
         raise KnowledgeBaseLoadError(f"Knowledge-base directory not found: {kb_dir}")
 
     return {filename: load_workbook_sheets(kb_dir, filename) for filename in REQUIRED_WORKBOOKS}
+
+
+def load_kb06_records(kb_dir: Path) -> list[dict[str, Any]]:
+    """Load the deterministic weekly-follow-up templates from ``KB06.json``."""
+    path = kb_dir / "KB06.json"
+    if not path.exists():
+        raise KnowledgeBaseLoadError(f"Knowledge-base file not found: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise KnowledgeBaseLoadError(f"Failed to read KB06.json: {exc}") from exc
+    if not isinstance(payload, list):
+        raise KnowledgeBaseLoadError("KB06.json must contain a top-level list.")
+    if not all(isinstance(item, dict) for item in payload):
+        raise KnowledgeBaseLoadError("Every KB06.json entry must be an object.")
+    return payload

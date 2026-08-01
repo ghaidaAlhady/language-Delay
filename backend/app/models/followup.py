@@ -1,12 +1,4 @@
-"""Weekly follow-up / reassessment: compares a new assessment to the child's
-previous one and records the resulting progress narrative.
-
-"Follow-up" is implemented as a reassessment using the same KB05 question set
-(see docs/DECISIONS_AND_ASSUMPTIONS.md) — no separate follow-up question bank
-exists in the supplied knowledge base, so inventing one would violate the
-"use only the supplied KB" rule. Progress fields mirror KB04's
-تقرير_التقدم (progress report) template.
-"""
+"""Persisted weekly-plan follow-up and deterministic KB06 answer snapshot."""
 from __future__ import annotations
 
 from sqlalchemy import Float, ForeignKey, String
@@ -25,8 +17,11 @@ class Followup(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     previous_assessment_id: Mapped[str] = mapped_column(
         ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False
     )
-    current_assessment_id: Mapped[str] = mapped_column(
-        ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False, unique=True
+    current_assessment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("assessments.id", ondelete="CASCADE"), nullable=True
+    )
+    weekly_plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("weekly_plans.id", ondelete="CASCADE"), nullable=True, unique=True
     )
     previous_score_percent: Mapped[float] = mapped_column(Float, nullable=False)
     current_score_percent: Mapped[float] = mapped_column(Float, nullable=False)
@@ -35,3 +30,5 @@ class Followup(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     support_needed_domains: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     comment: Mapped[str] = mapped_column(String(2000), nullable=False)
     next_goal: Mapped[str] = mapped_column(String(500), nullable=False)
+    question_answers: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    question_context: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)

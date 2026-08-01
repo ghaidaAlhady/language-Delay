@@ -23,6 +23,7 @@ from app.rag.schemas import (
     QuestionRecord,
     ReferenceRecord,
     ReportStatus,
+    WeeklyFollowupQuestionRecord,
 )
 
 
@@ -33,12 +34,26 @@ class _DecisionRuleBand:
     high_exclusive: float | None
 
 
+@dataclass(frozen=True)
+class SelectedWeeklyFollowupQuestion:
+    """A KB06 template deterministically bound to one approved KB02 activity."""
+
+    id: str
+    source_record: WeeklyFollowupQuestionRecord
+    activity: ActivityRecord
+    question_text_ar: str
+    fallback_used: bool
+
+
 @dataclass
 class KnowledgeBaseRepository:
     kb: KnowledgeBase
 
     _milestones_by_id: dict[str, MilestoneRecord] = field(init=False, default_factory=dict)
     _activities_by_id: dict[str, ActivityRecord] = field(init=False, default_factory=dict)
+    _decision_rules_by_id: dict[str, DecisionRuleRecord] = field(
+        init=False, default_factory=dict
+    )
     _questions_by_age: dict[int, list[QuestionRecord]] = field(init=False, default_factory=dict)
     _activities_by_age_domain: dict[tuple[int, Domain], list[ActivityRecord]] = field(
         init=False, default_factory=dict
@@ -50,11 +65,19 @@ class KnowledgeBaseRepository:
         init=False, default_factory=dict
     )
     _reference_by_code: dict[str, ReferenceRecord] = field(init=False, default_factory=dict)
+    _weekly_followup_questions: list[WeeklyFollowupQuestionRecord] = field(
+        init=False, default_factory=list
+    )
 
     def __post_init__(self) -> None:
         self._milestones_by_id = {m.id: m for m in self.kb.milestones}
         self._activities_by_id = {a.id: a for a in self.kb.activities}
+        self._decision_rules_by_id = {r.id: r for r in self.kb.decision_rules}
         self._reference_by_code = {r.code: r for r in self.kb.references}
+        self._weekly_followup_questions = sorted(
+            (q for q in self.kb.weekly_followup_questions if q.active),
+            key=lambda q: q.id,
+        )
 
         questions_by_age: dict[int, list[QuestionRecord]] = defaultdict(list)
         for question in self.kb.questions:
@@ -137,6 +160,14 @@ class KnowledgeBaseRepository:
 
     # -- Decision rules (KB03) ------------------------------------------------
 
+    def get_decision_rule_by_id(self, rule_id: str) -> DecisionRuleRecord:
+        try:
+            return self._decision_rules_by_id[rule_id]
+        except KeyError as exc:
+            raise KnowledgeBaseLookupError(
+                f"Unknown decision rule ID: {rule_id!r}"
+            ) from exc
+
     def _find_band(self, age: int, domain: Domain, score_percent: float) -> _DecisionRuleBand:
         bands = self._decision_bands.get((age, domain))
         if not bands:
@@ -176,6 +207,69 @@ class KnowledgeBaseRepository:
     def get_questions_for_age(self, age: int) -> list[QuestionRecord]:
         return list(self._questions_by_age.get(age, []))
 
+    # -- Weekly follow-up questions (KB06) ------------------------------------
+
+    def select_weekly_followup_questions(
+        self, *, age: int, activities: list[ActivityRecord]
+    ) -> list[SelectedWeeklyFollowupQuestion]:
+        """Bind 5-8 KB06 templates to the plan's real KB02 activities.
+
+        Exact activity/domain templates always win. The generic templates are
+        used only for an activity that has no eligible specific KB06 record.
+        """
+        selected: list[SelectedWeeklyFollowupQuestion] = []
+        for index, activity in enumerate(activities[:8]):
+            eligible = [
+                question
+                for question in self._weekly_followup_questions
+                if question.age_min <= age <= question.age_max
+                and not question.is_generic_fallback
+                and question.domain == activity.domain
+                and activity.id in question.applicable_activity_ids
+            ]
+            fallback_used = False
+            if not eligible:
+                eligible = [
+                    question
+                    for question in self._weekly_followup_questions
+                    if question.age_min <= age <= question.age_max
+                    and question.is_generic_fallback
+                    and (question.domain is None or question.domain == activity.domain)
+                ]
+                fallback_used = True
+            if not eligible:
+                raise KnowledgeBaseLookupError(
+                    f"No KB06 question covers age={age}, activity={activity.id!r}"
+                )
+
+            template = eligible[index % len(eligible)]
+            question_id = f"{template.id}-{activity.id}"
+            if len(question_id) > 20:
+                raise KnowledgeBaseLookupError(
+                    f"Generated KB06 question ID exceeds storage limit: {question_id!r}"
+                )
+            selected.append(
+                SelectedWeeklyFollowupQuestion(
+                    id=question_id,
+                    source_record=template,
+                    activity=activity,
+                    question_text_ar=template.question_text_ar.format(
+                        activity=activity.name,
+                        skill=activity.target_skill,
+                        goal=activity.goal,
+                        domain=activity.domain.value,
+                        expected_behavior=activity.expected_outcome,
+                    ),
+                    fallback_used=fallback_used,
+                )
+            )
+
+        if len(selected) < 5:
+            raise KnowledgeBaseLookupError(
+                "A weekly plan must provide at least five activities for KB06 selection."
+            )
+        return selected
+
     # -- Report templates (KB04) ------------------------------------------------
 
     def get_narrative_template(self, status: ReportStatus) -> NarrativeTemplate:
@@ -204,7 +298,7 @@ class KnowledgeBaseRepository:
 
 
 def load_knowledge_base_repository(kb_dir: Path) -> KnowledgeBaseRepository:
-    """Load and validate KB01-KB05 from ``kb_dir`` and build the repository.
+    """Load and validate KB01-KB06 from ``kb_dir`` and build the repository.
 
     Intended to run once at application startup; failures are structural data
     problems and should fail fast rather than be caught per-request.

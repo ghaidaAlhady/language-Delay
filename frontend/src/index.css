@@ -1,0 +1,68 @@
+@import "tailwindcss";
+@import "@fontsource/tajawal/400.css";
+@import "@fontsource/tajawal/500.css";
+@import "@fontsource/tajawal/700.css";
+
+/*
+ * Design tokens. Colors, radius, and font family are informed by the
+ * approved Base44 reference site's own public CSS custom properties and
+ * font choice (Tajawal) — not copied component code, just the same design
+ * language: calm indigo/purple primary, soft sky-blue secondary, rounded
+ * (1rem) corners, supportive greens/oranges for status.
+ */
+@theme {
+  --font-sans: "Tajawal", ui-sans-serif, system-ui, sans-serif;
+
+  --color-primary-50: #f1f0ff;
+  --color-primary-100: #e4e2ff;
+  --color-primary-200: #c9c5ff;
+  --color-primary-300: #ada7ff;
+  --color-primary-400: #8b83ff;
+  --color-primary-500: #6c63ff;
+  --color-primary-600: #5b54e8;
+  --color-primary-700: #4a44ba;
+  --color-primary-800: #3a358c;
+  --color-primary-900: #2a275f;
+
+  --color-secondary-50: #f0f9ff;
+  --color-secondary-100: #e0f4ff;
+  --color-secondary-200: #c2e9ff;
+  --color-secondary-300: #a3deff;
+  --color-secondary-400: #8fd3ff;
+  --color-secondary-500: #6bc4ff;
+  --color-secondary-600: #4aaeea;
+
+  --color-success-50: #eafbf1;
+  --color-success-500: #4ecb71;
+  --color-success-600: #34a856;
+
+  --color-warning-50: #fff6ea;
+  --color-warning-500: #ffb347;
+  --color-warning-600: #e0932a;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-500: #dc2626;
+  --color-danger-600: #b91c1c;
+
+  --color-accent-500: #ff6b9d;
+
+  --radius-card: 1rem;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-primary-50);
+  color: #1f1b2e;
+}
+
+/* Visible focus states everywhere, per the accessibility requirement. */
+:focus-visible {
+  outline: 3px solid var(--color-primary-500);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from app.ai.providers import build_ai_provider
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
@@ -26,8 +27,12 @@ logger = get_logger(__name__)
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("loading_knowledge_base", path=str(settings.knowledge_base_path))
     _app.state.kb_repository = load_knowledge_base_repository(settings.knowledge_base_path)
+    _app.state.ai_provider = build_ai_provider(settings)
     logger.info("knowledge_base_loaded")
-    yield
+    try:
+        yield
+    finally:
+        await _app.state.ai_provider.aclose()
 
 
 app = FastAPI(

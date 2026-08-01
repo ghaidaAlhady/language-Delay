@@ -1,14 +1,15 @@
 # Database Schema
 
-SQLite for MVP (`DATABASE_URL`), via SQLAlchemy 2.x async ORM + Alembic migrations
+SQLite for local development and PostgreSQL for hosted deployment (`DATABASE_URL`), via SQLAlchemy 2.x async ORM + Alembic migrations
 (`backend/alembic/versions/`). All primary keys are UUIDv4 strings. All tables have
 `created_at`/`updated_at` (UTC, timezone-aware — see `UTCDateTime` in
 `docs/DECISIONS_AND_ASSUMPTIONS.md`). Foreign keys use `ON DELETE CASCADE`, and SQLite's
 `PRAGMA foreign_keys=ON` is enabled on every connection so cascades actually fire (off by
 default in SQLite otherwise).
 
-The knowledge base (KB01–KB05) is **not** stored in the database — it is loaded once at
-startup from the `.xlsx` files into an in-memory, indexed `KnowledgeBaseRepository`
+The knowledge base (KB01–KB06) is **not** stored in the database — KB01–KB05 are loaded once
+from their `.xlsx` files and KB06 from structured JSON into an in-memory, indexed
+`KnowledgeBaseRepository`
 (`app/repositories/knowledge_base_repository.py`) and queried by ID/age/domain. Assessment
 answers and domain results store only the KB *IDs* they resolved to (e.g. `decision_rule_id`,
 `activity_id`), not copies of KB content — except where noted below, where a text snapshot is
@@ -29,6 +30,7 @@ erDiagram
     WEEKLY_PLANS ||--|{ WEEKLY_PLAN_ACTIVITIES : contains
     CHILDREN ||--o{ FOLLOWUPS : has
     ASSESSMENTS ||--o| FOLLOWUPS : "current/previous"
+    WEEKLY_PLANS ||--o| FOLLOWUPS : evaluates
 
     USERS {
         string id PK
@@ -115,12 +117,15 @@ erDiagram
         string id PK
         string child_id FK
         string previous_assessment_id FK
-        string current_assessment_id FK, UK "one followup per new assessment"
+        string current_assessment_id FK "nullable; retained for legacy rows"
+        string weekly_plan_id FK, UK "one followup per evaluated plan"
         float previous_score_percent
         float current_score_percent
         float improvement_percent
         json improved_domains
         json support_needed_domains
+        json question_answers "exact submitted KB06 responses"
+        json question_context "selected question/plan snapshots"
         string comment "KB04 narrative snapshot"
         string next_goal
     }
@@ -128,8 +133,9 @@ erDiagram
 
 ## Why some KB text is snapshotted and some is looked up live
 
-`AssessmentDomainResult.recommendation`/`follow_up` and `Report.summary_text`/
-`Followup.comment` store the KB03/KB04 text **as it was at generation time**, rather than
+`AssessmentDomainResult.recommendation`/`follow_up`, `Report.summary_text`, and
+`Followup.comment`/`question_context` store generated or selected text **as it was at
+generation time**, rather than
 being re-derived from the live KB on every read. This is deliberate: if the knowledge base is
 ever corrected or updated, a parent's historical report must not silently change — it's an
 audit record of what they were actually told. By contrast, `strengths`/`support_needs` (skill
@@ -148,5 +154,10 @@ one exception — old plans are soft-deactivated (`is_active=False`) rather than
 
 Run from `backend/`: `alembic upgrade head`. Each phase of this session added one migration
 (`backend/alembic/versions/`): users+refresh_tokens → children → assessments (3 tables) →
-reports → weekly_plans (2 tables) → followups. All verified to apply cleanly against a fresh
-database (see `IMPLEMENTATION_STATUS.md`).
+reports → weekly_plans (2 tables) → followups → plan-linked follow-up context. All verified
+to apply cleanly against a fresh database (see `IMPLEMENTATION_STATUS.md`).
+
+
+## Hosted reassessment persistence
+
+`weekly_plans` stores `followup_question_context`, `followup_generation_source`, `followup_fallback_reason`, and `followup_questions_frozen_at`. The first generated/selected 5-8 question set is written with a conditional update (`... WHERE followup_question_context IS NULL`) so concurrent requests and process restarts all return the same winner. The completed `followups.question_context` remains the immutable submission snapshot.

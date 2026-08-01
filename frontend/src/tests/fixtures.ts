@@ -1,0 +1,286 @@
+import type {
+  ActivityExplanationResponse,
+  AIAssistanceResponse,
+  AssessmentQuestionResponse,
+  AssessmentResponse,
+  ChildResponse,
+  FollowupResponse,
+  ReportResponse,
+  UserResponse,
+  WeeklyFollowupContextResponse,
+  WeeklyPlanResponse,
+} from "@/types/api";
+
+export const fixtureAIAssistance: AIAssistanceResponse = {
+  content: {
+    title: "شرح مبسط",
+    summary: "هذا ملخص مبسط للحقائق الحتمية المعروضة.",
+    encouragement: "استمروا في الممارسة المنزلية المنتظمة.",
+    action_tips: [
+      {
+        text: "جرّبوا النشاط المعتمد بخطوات قصيرة.",
+        source_id: "A001",
+      },
+    ],
+    disclaimer:
+      "هذا التطبيق أداة داعمة لولي الأمر ولا يغني عن التقييم أو العلاج من قبل أخصائي تخاطب مؤهل. هذا التقرير لا يمثل تشخيصاً طبياً.",
+    source_ids: ["A001"],
+  },
+  generation_source: "gemini",
+  fallback_reason: null,
+  prompt_version: "v1",
+  source_references: [{ source_id: "A001", label_ar: "أكمل الجملة", category: "نشاط معتمد" }],
+};
+
+export const fixtureActivityExplanation: ActivityExplanationResponse = {
+  content: {
+    activity_id: "A001",
+    title_ar: "أكمل الجملة",
+    simple_explanation_ar: "شرح مبسط للنشاط.",
+    purpose_ar: "دعم اللغة التعبيرية.",
+    steps_ar: ["جهّزوا الأدوات.", "ابدأوا بخطوة بسيطة.", "كرروا النشاط بانتظام."],
+    example_dialogue: {
+      parent_text: "هيا نكمل الجملة معًا.",
+      example_child_response: "قد يشارك الطفل بمحاولة بسيطة — هذا مثال محتمل فقط.",
+      supportive_parent_continuation: "أحسنت! لنكرر ذلك مرة أخرى.",
+    },
+    alternative_ar: "بسّطوا النشاط بتقليل عدد الخيارات إذا لم يستجب الطفل.",
+    source_ids: ["A001"],
+  },
+  generation_source: "gemini",
+  fallback_reason: null,
+  prompt_version: "v2",
+  source_references: [{ source_id: "A001", label_ar: "أكمل الجملة", category: "نشاط معتمد" }],
+};
+
+export const fixtureUser: UserResponse = {
+  id: "user-1",
+  email: "parent@example.com",
+  display_name: "ولي الأمر",
+  created_at: "2026-01-01T00:00:00Z",
+};
+
+export const fixtureChild: ChildResponse = {
+  id: "child-1",
+  name: "سارة",
+  date_of_birth: "2022-01-01",
+  gender: "female",
+  home_language: "ar",
+  has_previous_diagnosis: false,
+  previous_diagnosis_details: null,
+  has_hearing_problems: false,
+  uses_hearing_aid: false,
+  notes: null,
+  age_years: 4,
+  is_assessment_age_eligible: true,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
+
+export const fixtureQuestions: AssessmentQuestionResponse[] = [
+  {
+    id: "Q001",
+    age: 4,
+    domain: "اللغة الاستقبالية",
+    question: "هل يستجيب الطفل عند مناداة اسمه؟",
+    linked_milestone_id: "RL001",
+  },
+  {
+    id: "Q002",
+    age: 4,
+    domain: "اللغة الاستقبالية",
+    question: "هل ينفذ تعليمات بسيطة؟",
+    linked_milestone_id: "RL002",
+  },
+];
+
+export const fixtureAssessmentInProgress: AssessmentResponse = {
+  id: "assessment-1",
+  child_id: "child-1",
+  age_at_assessment: 4,
+  status: "in_progress",
+  started_at: "2026-01-01T00:00:00Z",
+  completed_at: null,
+  answered_count: 0,
+  total_questions: 2,
+  overall_severity: null,
+  overall_referral: null,
+  confidence_score: null,
+  priority_domains: [],
+  strengths: [],
+  support_needs: [],
+  domain_results: [],
+};
+
+export const fixtureAssessmentCompleted: AssessmentResponse = {
+  ...fixtureAssessmentInProgress,
+  status: "completed",
+  completed_at: "2026-01-01T00:10:00Z",
+  answered_count: 2,
+  overall_severity: "طبيعي",
+  overall_referral: "لا",
+  confidence_score: 1,
+  priority_domains: ["اللغة الاستقبالية"],
+  strengths: ["الاستجابة للاسم"],
+  support_needs: [],
+  domain_results: [
+    {
+      domain: "اللغة الاستقبالية",
+      score_percent: 100,
+      severity: "طبيعي",
+      referral: "لا",
+      decision_rule_id: "R001",
+      recommendation: "استمر في الأنشطة اليومية المناسبة للعمر.",
+      follow_up: "إعادة التقييم بعد 3 أشهر",
+      suggested_activity_ids: ["A001", "A002"],
+    },
+  ],
+};
+
+export const fixtureReport: ReportResponse = {
+  id: "report-1",
+  report_number: "REP-0001",
+  language: "ar",
+  child_id: "child-1",
+  child_name: "سارة",
+  child_age_years: 4,
+  assessment_id: "assessment-1",
+  generated_at: "2026-01-01T00:15:00Z",
+  overall_severity: "طبيعي",
+  overall_referral: "لا",
+  referral_recommended: false,
+  confidence_score: 1,
+  domain_summaries: [
+    {
+      domain: "اللغة الاستقبالية",
+      score_percent: 100,
+      severity: "طبيعي",
+      recommendation: "استمر.",
+    },
+  ],
+  strengths: ["الاستجابة للاسم"],
+  support_needs: [],
+  summary_text: "أظهر التقييم أن الطفل يحقق المهارات اللغوية المتوقعة لعمره.",
+  weekly_goal: "التركيز على اللغة الاستقبالية.",
+  recommended_activity_ids: ["A001", "A002"],
+  next_reassessment: "إعادة التقييم بعد أسبوع وتحديث الخطة",
+  disclaimer:
+    "هذا التطبيق أداة داعمة لولي الأمر ولا يغني عن التقييم أو العلاج من قبل أخصائي تخاطب مؤهل.",
+};
+
+export const fixtureWeeklyPlan: WeeklyPlanResponse = {
+  id: "plan-1",
+  child_id: "child-1",
+  assessment_id: "assessment-1",
+  is_active: true,
+  generated_at: "2026-01-01T00:20:00Z",
+  total_activities: 2,
+  completed_count: 0,
+  adherence_percent: 0,
+  reassessment_started: false,
+  activities: [
+    {
+      id: "slot-1",
+      day: "الأحد",
+      slot_order: 1,
+      completed: false,
+      completed_at: null,
+      activity: {
+        source_file: "KB02.xlsx",
+        source_sheet: "Activities",
+        id: "A001",
+        name: "تنفيذ التعليمات البسيطة",
+        age: 4,
+        domain: "اللغة الاستقبالية",
+        target_skill: "فهم التعليمات",
+        goal: "تحسين فهم التعليمات",
+        description: "يطلب من الطفل تنفيذ أوامر من خطوة واحدة.",
+        tools: "ألعاب منزلية",
+        duration: "10 دقائق",
+        frequency: "يوميًا",
+        difficulty: "سهل",
+        parent_instructions: "استخدم جملًا قصيرة.",
+        expected_outcome: "تحسن الاستجابة للتعليمات",
+        reference: "ASHA",
+      },
+    },
+    {
+      id: "slot-2",
+      day: "الأحد",
+      slot_order: 2,
+      completed: false,
+      completed_at: null,
+      activity: {
+        source_file: "KB02.xlsx",
+        source_sheet: "Activities",
+        id: "A002",
+        name: "لعبة الإشارة",
+        age: 4,
+        domain: "اللغة الاستقبالية",
+        target_skill: "فهم الإشارة",
+        goal: "تحسين فهم الإشارة",
+        description: "اطلب من الطفل الإشارة إلى أجزاء جسمه.",
+        tools: "لا يوجد",
+        duration: "10 دقائق",
+        frequency: "يوميًا",
+        difficulty: "سهل",
+        parent_instructions: "كرر الطلب بصبر.",
+        expected_outcome: "تحسن الفهم",
+        reference: "ASHA",
+      },
+    },
+  ],
+};
+
+export const fixtureFollowup: FollowupResponse = {
+  id: "followup-1",
+  child_id: "child-1",
+  previous_assessment_id: "assessment-1",
+  current_assessment_id: null,
+  weekly_plan_id: "plan-1",
+  previous_score_percent: 100,
+  current_score_percent: 100,
+  improvement_percent: 100,
+  improved_domains: ["اللغة الاستقبالية"],
+  support_needed_domains: [],
+  comment: "أظهر الطفل تحسنًا في مهارات اللغة.",
+  next_goal: "الاستمرار في دعم مهارات اللغة الاستقبالية.",
+  created_at: "2026-01-08T00:00:00Z",
+};
+
+export const fixtureWeeklyFollowupContext: WeeklyFollowupContextResponse = {
+  child_id: "child-1",
+  child_name: "سارة",
+  weekly_plan_id: "plan-1",
+  assessment_id: "assessment-1",
+  generated_at: "2026-01-01T00:20:00Z",
+  completed_count: 2,
+  total_activities: 2,
+  weekly_goals: ["تحسين فهم التعليمات", "تحسين فهم الإشارة"],
+  questions: Array.from({ length: 5 }, (_, index) => {
+    const activity = fixtureWeeklyPlan.activities[index % fixtureWeeklyPlan.activities.length]!;
+    return {
+      id: `K6R${index + 1}-${activity.activity.id}`,
+      source_question_id: `K6R${index + 1}`,
+      source_file: "KB06.json",
+      weekly_plan_id: "plan-1",
+      age: 4,
+      domain: activity.activity.domain,
+      weekly_goal: activity.activity.goal,
+      skill: activity.activity.target_skill,
+      activity_id: activity.activity.id,
+      activity_name: activity.activity.name,
+      expected_behavior: activity.activity.expected_outcome,
+      question: `خلال هذا الأسبوع، كم مرة استخدم الطفل مهارة «${activity.activity.target_skill}» أثناء نشاط «${activity.activity.name}»؟`,
+      response_type: "frequency_5",
+      required: true,
+      progress_weight: 1,
+      fallback_used: false,
+      linked_activity_ids: [activity.activity.id],
+      source_ids: [activity.activity.id, `K6R${index + 1}`],
+      prompt_version: "v2",
+    };
+  }),
+  generation_source: "gemini",
+  fallback_reason: null,
+};

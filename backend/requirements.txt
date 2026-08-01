@@ -4,6 +4,7 @@ pydantic>=2
 pydantic-settings
 sqlalchemy>=2
 aiosqlite
+asyncpg>=0.30,<1
 alembic
 python-jose[cryptography]
 passlib[argon2]
@@ -18,3 +19,4 @@ python-bidi
 slowapi
 structlog
 email-validator
+google-genai>=1,<2

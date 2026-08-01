@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.weekly_plan import WeeklyPlan, WeeklyPlanActivity
@@ -88,3 +88,39 @@ async def set_activity_kb_id(
     slot.activity_id = activity_id
     await session.flush()
     return slot
+
+
+async def freeze_followup_questions_if_empty(
+    session: AsyncSession,
+    *,
+    weekly_plan_id: str,
+    question_context: list[dict],
+    generation_source: str,
+    fallback_reason: str | None,
+    frozen_at: datetime,
+) -> WeeklyPlan:
+    """Persist the first generated question set and return the stored winner.
+
+    The conditional update makes concurrent requests and multi-process
+    deployments safe: only the first writer freezes the set, and every caller
+    reloads the same database value before returning it to the parent.
+    """
+    await session.execute(
+        update(WeeklyPlan)
+        .where(
+            WeeklyPlan.id == weekly_plan_id,
+            WeeklyPlan.followup_question_context.is_(None),
+        )
+        .values(
+            followup_question_context=question_context,
+            followup_generation_source=generation_source,
+            followup_fallback_reason=fallback_reason,
+            followup_questions_frozen_at=frozen_at,
+        )
+    )
+    await session.commit()
+    stored = await get_by_id(session, weekly_plan_id)
+    if stored is None:  # pragma: no cover - guarded by ownership/readiness path
+        raise RuntimeError("Weekly plan disappeared while freezing follow-up questions.")
+    await session.refresh(stored)
+    return stored

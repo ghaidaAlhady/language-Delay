@@ -10,7 +10,7 @@ implemented (see `IMPLEMENTATION_STATUS.md`).
 ```mermaid
 C4Context
     Person(parent, "Parent/Guardian", "Uses the mobile app")
-    System(backend, "Smart Guide Backend", "FastAPI + SQLite")
+    System(backend, "Smart Guide Backend", "FastAPI + SQLAlchemy; SQLite local / PostgreSQL hosted")
     System_Ext(kb, "Knowledge Base (KB01-KB05)", "Excel workbooks, read-only, bundled with the deployment")
     System_Ext(llm, "External LLM API", "Not called this session; deterministic KB-grounded generation is used instead")
 
@@ -44,7 +44,7 @@ graph TD
         RP6[KnowledgeBaseRepository]
     end
     subgraph DATA["storage"]
-        DB[(SQLite via SQLAlchemy async)]
+        DB[(SQLite local / PostgreSQL hosted via SQLAlchemy async)]
         KB[(KB01-KB05 .xlsx, in-memory)]
     end
 
@@ -66,7 +66,7 @@ sequenceDiagram
     participant API as FastAPI
     participant AS as AssessmentService
     participant KB as KnowledgeBaseRepository
-    participant DB as SQLite
+    participant DB as SQL database
 
     P->>API: POST /children/{id}/assessments
     API->>AS: start(child)
@@ -132,12 +132,78 @@ flowchart LR
    validation errors, and any unhandled exception into the consistent JSON envelope — stack
    traces never reach the client.
 
-## Why deterministic generation, not an LLM call
+## Deterministic authority and optional assisted wording
 
-No LLM provider is configured by default (`Settings.llm_configured` is `False` unless
-`LLM_PROVIDER`/`LLM_API_KEY` are set to real values). Every report, weekly-plan, and
-follow-up sentence in this session's implementation is either a verbatim KB03/KB04 text
-snapshot or a simple Arabic sentence template filled with KB fields (domain name,
-recommendation text) — never freely generated. This satisfies "if retrieval fails / no
-provider configured, use a real deterministic fallback — never fabricate" without needing an
-API key to be a fully functional product.
+Reports, scores, severity/referral decisions, weekly plans, and follow-up calculations remain
+fully deterministic and KB-grounded. Milestone 2 adds a separate optional wording layer:
+
+```mermaid
+flowchart LR
+    A[Authenticated POST] --> B[Masked resource ownership check]
+    B --> C[Whitelisted context builder]
+    C --> D[Approved KB01-KB06 records]
+    C --> E[Minimized immutable facts]
+    D & E --> F[Versioned prompt v1]
+    F --> G[Provider-neutral AIProvider]
+    G --> H[Official google-genai adapter]
+    H --> I[Strict AssistanceContent JSON]
+    I --> J[Pydantic + safety + grounding + immutable validation]
+    J -->|valid| K[Gemini wording]
+    J -->|any failure| L[Deterministic Arabic fallback]
+```
+
+`app/ai` owns contracts, context minimization, prompts, providers, validation,
+orchestration, and fallbacks. API routes never call Gemini directly. The default provider is
+disabled; the real adapter is constructed only when `GEMINI_ENABLED`, `GEMINI_API_KEY`, and
+`GEMINI_MODEL` are all configured. A fake provider is selectable only under
+`APP_ENV=e2e`.
+
+The React frontend calls only backend assistance endpoints and never receives a provider key, SDK, prompt, or raw response. Milestone 3 now persists the first validated follow-up question set on the weekly-plan row so hosted restarts do not change the wording.
+
+## Milestone 3: structured AI operations and the 70% rule
+
+Two more operations reuse this same pipeline shape but not `AssistanceContent` itself, since
+their output (a list of worded questions; an explanation with steps/example/alternative)
+doesn't fit the narrative title/summary/action_tips shape:
+
+```mermaid
+flowchart LR
+    A2[Deterministic KB06 candidate pool] --> F2[Prompt v2: select 5-8 + reword only]
+    F2 --> G[Provider-neutral AIProvider]
+    G --> I2[id + wording_ar pairs only]
+    I2 --> J2[Grounded merge: every other field copied from the deterministic candidate]
+    J2 -->|valid subset, no dup/forbidden wording| K2[Gemini-worded questions]
+    J2 -->|any failure| L2[Original KB06 wording, verbatim]
+    K2 & L2 --> M2[Atomic database freeze on weekly_plan_id]
+```
+
+`app/ai/followup_questions.py` and `app/ai/activity_explanation.py` sit alongside
+`orchestration.py` as sibling pipelines, sharing `AIProvider`/`ProviderRequest` (now carrying a
+`response_schema` field so `providers/gemini.py` isn't hardcoded to one output shape),
+provider selection, and structured/redacted logging — but each owns its own Pydantic schema,
+validator, and deterministic-fallback builder, since letting Gemini choose *which* KB06/KB02
+records to reference (rather than just wording) needs its own, narrower grounding contract.
+
+The **70% reassessment eligibility** rule (`weekly_plan_service.py::is_reassessment_eligible`)
+is plain deterministic business logic, not an AI concern — it replaces the previous strict-100%
+gate in `FollowupService._validate_plan_ready` and is mirrored (for display only; the backend
+remains authoritative) by a frontend util of the same name/shape.
+
+Source-reference resolution (`app/ai/source_labels.py`) is a small, shared, pure function used
+by both the narrative pipeline (`orchestration.py`) and the activity-explanation pipeline —
+it reads only the `GroundingRecord`s already assembled for a request's context, never provider
+output.
+
+
+## Hosted beta topology
+
+```mermaid
+flowchart LR
+    U[Parent browser] --> N[Netlify React/Vite SPA]
+    N -->|HTTPS JSON API| R[Render FastAPI service]
+    R --> P[(Neon PostgreSQL)]
+    R --> K[Bundled read-only knowledge_base]
+    R -. optional minimized context .-> G[Gemini API]
+```
+
+`netlify.toml` provides the SPA rewrite and security headers. `render.yaml` runs Alembic before the free web process starts and checks `/api/v1/health/ready`. The frontend backend-availability gate waits through a free Render cold start before mounting authentication. Hosted PostgreSQL URLs are normalized to `postgresql+asyncpg`, and frozen reassessment questions plus the resume signal survive restarts.

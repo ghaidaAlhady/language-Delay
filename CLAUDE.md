@@ -1,514 +1,119 @@
 # Repository Instructions for Claude Code
 
-Read `PROJECT_SPEC.md` and `CLAUDE_CODE_PROMPT.md` before changing code.
+This file records the current repository reality and safety constraints for
+Claude Code. Also read `AGENTS.md`, `PROGRESS.md`,
+`PROJECT_STATUS_AND_MILESTONES.md`, `PROJECT_SPEC.md`, and
+`CLAUDE_CODE_PROMPT.md` before coding. When older planning documents describe
+Flutter, Firebase, or an unimplemented chatbot as current, the repository,
+latest milestone report, and `PROGRESS.md` take precedence.
 
-# CLAUDE.md
+## Product boundary
 
-# Smart Guide for Children's Language Delay
+Smart Guide for Children's Language Delay is a parent-facing,
+evidence-supported decision-support tool for children aged 2–5. It does not
+diagnose and does not replace assessment or treatment by a qualified
+Speech-Language Therapist.
 
-**Project Version:** MVP (v1.0)
+Preserve the exact Arabic disclaimer in
+`backend/app/core/constants.py::DISCLAIMER_AR` in reports and assisted wording.
 
-This document is the **primary instruction file** for Claude Code. Read it at the beginning of every session before making any changes.
+## Current stack
 
-If any instruction in this file conflicts with assumptions, **this file takes precedence**.
+- React 19 + TypeScript + Vite frontend with React Router, TanStack Query,
+  Tailwind CSS, Vitest/MSW, and Playwright.
+- FastAPI + Pydantic v2 + async SQLAlchemy + Alembic backend.
+- SQLite MVP database.
+- Backend email/password authentication using Argon2, JWT access tokens, and
+  rotating opaque refresh tokens. Firebase and Google Sign-In are not
+  implemented.
+- Read-only KB01–KB05 Excel and KB06 JSON content. Retrieval is deterministic
+  metadata/ID lookup; there is no vector database or LlamaIndex runtime.
+- Optional server-side Gemini wording assistance through the official
+  `google-genai` SDK. It is disabled by default and always has a deterministic
+  fallback. No provider SDK or API key belongs in the frontend.
 
----
+## Required workflow
 
-# 1. Project Overview
+1. Confirm repository root, branch, and working-tree state.
+2. Explain the objective, intended files, implementation plan, and risks.
+3. Work on one approved checkpoint only.
+4. Implement incrementally and run relevant tests after every change.
+5. Run the full applicable build, lint, type, unit/integration, and E2E checks.
+6. Update `PROGRESS.md`, report every modified/untracked file, safe staging
+   paths, known failures, remaining work, and one suggested commit message.
+7. Stop before starting another checkpoint.
 
-Smart Guide for Children's Language Delay is an AI-powered mobile application that helps parents identify **early indicators of language delay** in children aged **2–5 years**.
+Preserve existing modified and untracked files. Never reset, clean, revert,
+discard, overwrite, change branches, merge, deploy, commit, or push unless the
+current user request explicitly authorizes that exact action and scope.
 
-The application is a **decision-support tool**, **not a medical diagnostic system**.
+Never stage `.env` files, secrets, API keys, databases, `node_modules`, build
+output, logs, screenshots, traces, videos, Playwright artifacts, coverage, or
+temporary files.
 
-It evaluates structured assessment responses, retrieves scientific knowledge from an internal Knowledge Base using Retrieval-Augmented Generation (RAG), and generates:
+## Deterministic clinical logic
 
-- Assessment Reports
-- Weekly Goals
-- Personalized Weekly Plans
-- Follow-up Analysis
-- Educational Chatbot Responses
+The backend is the sole authority for:
 
----
+- assessment questions, response weights, scoring, confidence, and completion;
+- severity, referral, age eligibility, strengths, and support needs;
+- KB activity, goal, and weekly-plan selection;
+- plan completion/adherence;
+- KB06 follow-up questions, progress, supported domains, and next goal.
 
-# 2. Core Principle
+Do not change any of those outputs for stylistic or AI reasons. Do not modify
+`knowledge_base/` or KB01–KB06 files unless an explicitly verified data defect
+is approved for correction. Historical assessments and reports are preserved;
+superseded weekly plans are deactivated rather than deleted.
 
-The application **must never claim to diagnose a child**.
+## Gemini's limited role
 
-Every generated report, recommendation, and chatbot response must clearly communicate that:
+Gemini may perform only these optional wording tasks:
 
-> This application supports parents but does not replace assessment or treatment by a qualified Speech-Language Therapist.
+1. explain an already-completed deterministic assessment result;
+2. summarize an already-generated weekly plan;
+3. summarize an already-computed weekly follow-up.
 
----
-
-# 3. Technology Stack
-
-Frontend
-
-- Flutter
-
-Backend
-
-- FastAPI
-
-Database
-
-- SQLite
-
-Authentication
-
-- Firebase Authentication
-- Email/Password
-- Google Sign-In
-
-AI
-
-- External LLM API
-
-Knowledge Base
-
-- Excel
-- JSON
-
-RAG
-
-- LlamaIndex (or equivalent retrieval framework)
-
----
-
-# 4. Repository Structure
+The required pipeline is:
 
 ```
-frontend/
-backend/
-database/
-knowledge_base/
-prompts/
-ai/
-api/
-.github/
+Authenticate
+→ Masked ownership check for the exact resource
+→ Retrieve approved deterministic/KB context
+→ Minimize and sanitize
+→ Versioned prompt
+→ Provider-neutral Gemini adapter with strict JSON
+→ Pydantic schema validation
+→ Safety, grounding, and immutable-fact validation
+→ Validated wording or deterministic fallback
 ```
 
-Keep this structure.
-
-Do not introduce unnecessary folders.
-
----
-
-# 5. Development Workflow
-
-Before writing code you MUST:
-
-1. Read the task carefully.
-2. Explain your understanding.
-3. Produce an implementation plan.
-4. Wait for confirmation if the requested change is large.
-5. Then implement incrementally.
-
-Never generate an entire application in one step.
-
----
-
-# 6. Coding Standards
-
-## General
-
-Write clean, readable code.
-
-Prefer clarity over cleverness.
-
-Avoid duplication.
-
-Use meaningful names.
-
-Keep functions small.
-
-Document complex logic.
-
-Use English for:
-
-- Code
-- Comments
-- Variable names
-- API names
-- Database tables
-
-Arabic is only used for UI text and localized content.
-
----
-
-## Flutter
-
-Use:
-
-- Feature-first architecture
-- Stateless widgets whenever possible
-- Material 3
-- Repository Pattern
-- Dependency Injection
-- Consistent naming
-
-One feature per folder.
-
-Avoid business logic inside UI widgets.
-
----
-
-## FastAPI
-
-Use:
-
-- Routers
-- Services
-- Repositories
-- Schemas
-- Models
-
-Never place database logic inside API routes.
-
-Use dependency injection.
-
-Validate every request with Pydantic.
-
-Return proper HTTP status codes.
-
----
-
-## Database
-
-Normalize tables.
-
-Use foreign keys.
-
-Avoid duplicated data.
-
-Never delete historical assessments or reports.
-
-Only the latest weekly plan should be marked as active.
-
----
-
-# 7. AI Rules
-
-The LLM **must never answer directly**.
-
-Every AI generation follows this pipeline:
-
-```
-User Request
-
-↓
-
-Retrieve Knowledge
-
-↓
-
-Build Context
-
-↓
-
-Generate Response
-
-↓
-
-Validate Output
-
-↓
-
-Return Response
-```
-
-If retrieval fails:
-
-Return a safe fallback response.
-
-Never hallucinate information.
-
----
-
-# 8. Knowledge Base
-
-The system depends on five knowledge bases.
-
-Do not rename them.
-
-```
-KB01
-Language Milestones
-
-KB02
-Home Activities
-
-KB03
-Decision Rules
-
-KB04
-Report Templates
-
-KB05
-Assessment Questions
-```
-
-The retrieval system should always search these first.
-
----
-
-# 9. Project Scope
-
-Version 1 includes:
-
-- Authentication
-- Child Profiles
-- Assessment
-- AI Report
-- Weekly Goal
-- Weekly Plan
-- Weekly Follow-up
-- Chatbot
-- PDF Export
-
-Anything else is outside scope unless explicitly approved.
-
----
-
-# 10. Do NOT Implement
-
-Never add:
-
-- Admin Dashboard
-- Therapist Portal
-- Appointment Booking
-- Push Notifications
-- Voice Recognition
-- Speech Analysis
-- Audio Recording
-- AI Model Training
-- Advanced Analytics
-- Payment Systems
-
-Do not invent features.
-
----
-
-# 11. Files You Must NOT Modify
-
-Unless explicitly instructed.
-
-```
-knowledge_base/
-
-KB01_*
-KB02_*
-KB03_*
-KB04_*
-KB05_*
-```
-
-These are scientific reference files.
-
-Treat them as read-only.
-
-Also avoid changing:
-
-```
-docs/
-DECISIONS.md
-CLAUDE.md
-```
-
-unless requested.
-
----
-
-# 12. API Design Rules
-
-REST only.
-
-Use nouns.
-
-Examples:
-
-```
-/children
-/assessments
-/reports
-/weekly-plans
-/chat
-```
-
-Never use verbs in endpoint names.
-
-Version APIs.
-
-Example:
-
-```
-/api/v1/
-```
-
----
-
-# 13. Testing Rules
-
-Every new feature must include tests.
-
-Minimum:
-
-Backend
-
-- Unit Tests
-- API Tests
-
-Frontend
-
-- Widget Tests
-- Logic Tests (where applicable)
-
-Do not merge features without tests.
-
----
-
-# 14. Security Rules
-
-Never commit:
-
-- API Keys
-- Tokens
-- Passwords
-- Secrets
-- Database files containing real data
-
-Always use:
-
-```
-.env
-```
-
-for secrets.
-
-Never hardcode credentials.
-
----
-
-# 15. Git Rules
-
-Keep commits focused.
-
-Recommended commit prefixes:
-
-```
-feat:
-fix:
-docs:
-refactor:
-test:
-chore:
-```
-
-Never mix unrelated changes.
-
----
-
-# 16. Performance Rules
-
-Avoid unnecessary API calls.
-
-Cache repeated Knowledge Base loading.
-
-Reuse HTTP clients.
-
-Keep Flutter rebuilds minimal.
-
-Generate PDFs asynchronously.
-
----
-
-# 17. Error Handling
-
-Never expose stack traces.
-
-Return meaningful messages.
-
-Log unexpected exceptions.
-
-Validate user input before processing.
-
----
-
-# 18. Localization
-
-The application supports:
-
-- Arabic (Default)
-- English
-
-All user-facing strings must be localizable.
-
-Never hardcode visible text inside widgets.
-
----
-
-# 19. Definition of Done
-
-A task is complete only when:
-
-- Code builds successfully.
-- Tests pass.
-- No linting errors.
-- Documentation is updated (if needed).
-- API contracts remain consistent.
-- Existing features are not broken.
-
----
-
-# 20. Decision-Making Rules
-
-When multiple implementation options exist:
-
-Choose the solution that is:
-
-1. Simpler
-2. Easier to maintain
-3. Easier for AI agents to understand
-4. Easier to test
-5. Consistent with Clean Architecture
-
-Avoid unnecessary abstraction.
-
----
-
-# 21. Communication Rules
-
-Before writing code:
-
-Always provide:
-
-- Objective
-- Files to modify
-- Implementation plan
-- Potential risks
-
-After implementation:
-
-Summarize:
-
-- Files changed
-- What was added
-- Tests written
-- Remaining work
-
----
-
-# 22. Project Mission
-
-This project exists to empower parents with evidence-based guidance while respecting the limits of AI.
-
-Every feature should reinforce these principles:
-
-- Scientific reliability
-- Simplicity
-- Safety
-- Privacy
-- Transparency
-- Maintainability
-
-If uncertain about any requirement, ask before implementing. Never assume requirements that change the approved project scope.
+Gemini must never score, diagnose, determine eligibility, select or alter
+severity/referral, choose activities/goals/plans, change follow-up progress,
+prescribe medication, recommend treatment, or override deterministic output.
+
+Never send a provider names, emails, user/child/resource IDs, tokens, full
+answer histories, notes, medical history, secrets, raw database rows, or other
+free-form profile data. Never log prompts, minimized context, provider
+responses, provider errors, generated health wording, PII, resource IDs, or
+secrets.
+
+Provider failures, timeouts, invalid JSON, unsafe wording, and ungrounded
+sources return useful deterministic wording with HTTP 200. Authentication,
+authorization, resource-state, and request-validation errors keep their normal
+HTTP semantics.
+
+## Architecture and quality
+
+- Routes use services and repositories; database logic does not belong in API
+  handlers.
+- All requests and responses use typed Pydantic/TypeScript contracts.
+- Frontend API calls go through `frontend/src/api/client.ts`.
+- Keep Arabic UI RTL-safe and localizable.
+- Prefer clear, provider-neutral, testable code over unnecessary abstraction.
+- New backend behavior needs unit and API tests; new frontend states need
+  component tests; changed user journeys need focused E2E coverage.
+
+Do not add a chatbot, autonomous agent, admin/therapist portal, appointments,
+payments, notifications, speech/voice analysis, audio recording, model
+training, or advanced analytics without explicit approval.

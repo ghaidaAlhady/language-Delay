@@ -26,6 +26,7 @@ class WeeklyPlanResponse(BaseModel):
     total_activities: int
     completed_count: int
     adherence_percent: float
+    reassessment_started: bool = False
     activities: list[WeeklyPlanActivityResponse]
 
 

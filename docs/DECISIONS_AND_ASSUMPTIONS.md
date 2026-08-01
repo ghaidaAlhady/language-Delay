@@ -87,19 +87,25 @@ Per-domain severities/referrals are aggregated to a single overall value using
 safest, most conservative choice per `CLAUDE.md`'s decision-making rules.
 
 ### Weekly-goal / next-reassessment text
-Reports and follow-ups derive a "weekly goal" sentence and a reassessment-interval string
-from the single worst-scoring domain's KB03 recommendation/follow-up text (never freely
-generated), via the shared `pick_priority_domain` helper (`app/services/domain_priority.py`).
+Reports derive a "weekly goal" sentence from the single worst-scoring domain's KB03
+recommendation via the shared `pick_priority_domain` helper
+(`app/services/domain_priority.py`). User-facing reassessment timing is deliberately
+normalized to the approved weekly workflow:
+`إعادة التقييم بعد أسبوع وتحديث الخطة`. This presentation-only correction does not change
+initial scoring, severity, specialist-referral rules, or KB03 content.
 
-### "Follow-up" = reassessment using the same KB05 question set
-`PROJECT_SPEC.md` says "the parent answers follow-up questions" but no distinct follow-up
-question bank exists anywhere in the supplied knowledge base — only KB05's assessment
-questions. Inventing a second question set would violate "use only the supplied KB." This
-session treats a follow-up as: start a new assessment (`POST /children/{id}/assessments`),
-answer/complete it via the normal flow, then call
-`POST /assessments/{id}/followup` to compare it against the child's previous completed
-assessment, produce a KB04-grounded progress narrative, and auto-regenerate the weekly plan.
-See `app/services/followup_service.py`.
+### Weekly follow-up uses plan-linked KB06 questions
+The focused corrections checkpoint added `knowledge_base/KB06.json` as a distinct,
+deterministic weekly-progress source. KB05 remains exclusive to the broad initial assessment.
+After every activity in the exact current active plan is complete, the backend selects 5–8
+KB06 questions using child age, plan domains/goals, and the plan's real KB02 activity IDs.
+Specific activity/domain matches are preferred; a small same-domain generic template is used
+only when no specific match exists. The full KB05 initial assessment is never a fallback.
+
+Answers and the exact selected-question context are stored against the child, parent, and
+weekly-plan ID. Submission is idempotent per plan, produces non-diagnostic weekly progress,
+soft-deactivates the completed plan, and generates the next plan through the existing
+deterministic `WeeklyPlanService`. See `app/services/followup_service.py`.
 
 ### Weekly-plan generation and "only the latest plan is active"
 `CLAUDE.md`'s DB section says "Only the latest weekly plan should be marked as active" —
@@ -121,13 +127,11 @@ KB02's file order, starving the "alternative activity" feature for that domain.
 acceptable for SQLite/single-process MVP.
 
 ### PDF Arabic font
-No font file is committed (licensing — `CLAUDE_CODE_PROMPT.md` explicitly forbids this).
-`PDF_ARABIC_FONT_PATH` (env var) lets a deployment point at a Unicode TTF (e.g. Amiri, Noto
-Naskh Arabic) with real Arabic glyph coverage; `render_report_pdf` registers it with
-ReportLab if present. Without it, PDF generation still produces a real, valid PDF file (never
-a fake/placeholder response) — Arabic text just won't render legibly until a font is
-configured. Arabic shaping/bidi reordering (`arabic_reshaper` + `python-bidi`) is always
-applied regardless of font.
+The repository includes the open-licensed Tajawal Regular font together with its OFL license
+under `backend/assets/fonts/`. `render_report_pdf` embeds that packaged font by default, so
+Arabic output does not depend on fonts installed on the host. `PDF_ARABIC_FONT_PATH` remains
+an optional operator override. Arabic shaping/bidi reordering (`arabic_reshaper` +
+`python-bidi`) and text sanitization are applied before ReportLab draws each wrapped RTL line.
 
 ### Refresh-token storage and revocation
 Refresh tokens are opaque, high-entropy random strings (`secrets.token_urlsafe(48)`) — never
@@ -163,11 +167,73 @@ Every ownership check (child, assessment, report, weekly plan, followup) returns
 so a caller cannot distinguish "doesn't exist" from "isn't yours," which would otherwise leak
 the existence of other users' data.
 
+## Frontend session addendum (2026-07-22)
+
+### CORS origin update for the web frontend
+`CORS_ORIGINS` (`backend/.env`, `backend/.env.example`) changed from
+`["http://localhost:3000"]` (an unused placeholder — no frontend existed yet) to
+`["http://127.0.0.1:5173","http://localhost:5173"]`, matching the Vite dev server this
+session added at `frontend/`. Pure environment-variable/config change, no Python code
+touched: `app/main.py` already conditionally added `CORSMiddleware` with explicit
+`allow_origins` from `settings.cors_origins` and `allow_credentials=True` — never a
+wildcard. Covered by `tests/test_cors.py` (configured origin is allowed and echoed back;
+an unconfigured origin is not; wildcard-with-credentials is asserted absent).
+
 ## Remaining open items (not applicable to a backend-only session)
 - Embedding/retrieval implementation: not applicable — retrieval is deterministic
   metadata-filtered lookup (age, domain, ID), not embedding similarity search. No LLM
   provider is configured by default; report generation is fully deterministic/KB-grounded
   (see `RAG_AI_DESIGN.md`).
-- LLM provider/model selection: `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY` env vars exist
-  as configuration surface for a future LLM-assisted layer (e.g. chatbot), but nothing in
-  this session's scope calls out to one.
+- The generic `LLM_*` configuration remains for backward compatibility. Milestone 2 uses
+  explicit `GEMINI_*` settings for three wording-only operations; it does not add a chatbot.
+
+## Milestone 2 decisions — safe Gemini assistance
+
+1. **Deterministic output remains authoritative.** The model receives completed decisions
+   and approved KB context only; it cannot participate in scoring, severity/referral,
+   eligibility, activity/goal/plan selection, or follow-up calculation.
+2. **No generated-text persistence.** Assisted wording is optional presentation content.
+   Avoiding storage removes migration, staleness, and sensitive-retention concerns.
+3. **Provider-neutral core, Gemini adapter at the edge.** Orchestration depends on
+   `AIProvider`; only `providers/gemini.py` imports the official SDK. The import is lazy so
+   default-disabled deployments start safely before optional dependencies are installed.
+4. **Disabled by default; model is operator-selected.** An empty model is treated as not
+   configured. The repository documents `gemini-2.5-flash` as a verified stable structured-
+   output example but does not hardcode a model.
+5. **Provider failures are product-success fallbacks.** Timeouts, provider errors, malformed
+   JSON, unsafe language, or ungrounded sources return HTTP 200 deterministic wording.
+   Authentication, ownership, resource state, validation, and rate limits are not hidden.
+6. **Structured JSON is necessary but insufficient.** Pydantic forbids extra fields, then
+   application validators enforce the exact disclaimer, safety language, source subset,
+   KB02 activity ID/name binding, and immutable fact consistency.
+7. **Privacy by construction.** Context builders manually copy allowed fields instead of
+   serializing ORM/API objects. This prevents names, emails, resource IDs, answers, notes,
+   medical history, and secrets from entering prompts.
+8. **E2E fake is environment-gated.** `AI_TEST_PROVIDER=fake` works only with
+   `APP_ENV=e2e`; production silently follows normal disabled/configured provider selection.
+9. **No retry loop in application orchestration.** Retry count and timeout belong to the
+   official provider HTTP configuration. The orchestration performs one logical generation
+   and then falls back, avoiding duplicate uncontrolled calls.
+
+
+## Deployment-readiness decisions (2026-08-01)
+
+1. **Hosted persistence uses PostgreSQL, local development may use SQLite.** Production
+   startup rejects SQLite because a free web-service filesystem is ephemeral. Common Neon
+   connection strings are normalized to SQLAlchemy's `postgresql+asyncpg` dialect.
+2. **Frozen reassessment questions are database state.** The first valid 5–8 question set is
+   atomically stored on `weekly_plans`; the process-local cache is only an optimization. This
+   preserves wording and resume behavior across refreshes, restarts, and multiple workers.
+3. **Alternative activities freeze with reassessment.** Before reassessment begins, an
+   exhausted unused pool may reuse a different approved same-domain activity rather than
+   fail with an unavoidable 409. Once questions are frozen, replacements are blocked so the
+   shown questions remain grounded to the plan that was assessed.
+4. **Free-backend wake-up is explicit UX.** The frontend probes `/health` before mounting
+   authentication and waits through a bounded hosted cold-start window. It never treats a
+   sleeping demo backend as immediate credential failure.
+5. **Production fails closed on unsafe configuration.** `APP_ENV=production` requires a
+   persistent PostgreSQL URL, a strong random secret, and one or more exact HTTPS CORS
+   origins. Wildcards, paths, credentials, HTTP origins, queries, and fragments are rejected.
+6. **Deployment target is beta/demo.** Netlify + Render + Neon is prepared for demonstration
+   and controlled testing. Always-on hosting, backups, monitoring, incident response, and a
+   formal privacy/compliance review remain prerequisites for production healthcare use.

@@ -5,6 +5,7 @@ from datetime import date
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import WEEKLY_REASSESSMENT_AR
 from app.core.errors import BadRequestError, NotFoundError
 from app.repositories import user_repository
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
@@ -112,7 +113,7 @@ async def test_generate_produces_report_with_expected_content(
     assert response.referral_recommended is False
     assert response.summary_text
     assert response.weekly_goal
-    assert response.next_reassessment
+    assert response.next_reassessment == WEEKLY_REASSESSMENT_AR
     assert response.disclaimer
     assert len(response.domain_summaries) == 4
     assert response.recommended_activity_ids

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import DISCLAIMER_AR
+from app.core.constants import DISCLAIMER_AR, WEEKLY_REASSESSMENT_AR
 from app.core.errors import BadRequestError, NotFoundError
 from app.models.assessment import Assessment
 from app.models.report import Report
@@ -65,7 +65,7 @@ class ReportService:
             report_number=report_number,
             summary_text=narrative.text,
             weekly_goal=_build_weekly_goal(priority_domain, priority_row.recommendation),
-            next_reassessment=priority_row.follow_up,
+            next_reassessment=WEEKLY_REASSESSMENT_AR,
         )
         await self.session.commit()
         return report
@@ -137,6 +137,9 @@ class ReportService:
             summary_text=report.summary_text,
             weekly_goal=report.weekly_goal,
             recommended_activity_ids=recommended_activity_ids,
-            next_reassessment=report.next_reassessment,
+            # Existing persisted reports may contain older KB03 timing (for
+            # example, four weeks or three months). The parent workflow is
+            # weekly, so every user-facing report response is normalized.
+            next_reassessment=WEEKLY_REASSESSMENT_AR,
             disclaimer=DISCLAIMER_AR,
         )
