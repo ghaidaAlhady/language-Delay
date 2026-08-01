@@ -73,6 +73,31 @@ None known as of this update. E2E suite execution is the next actual verificatio
 
 ## Current Agent Handoff
 
+### PostgreSQL follow-up constraint migration correction (2026-08-01)
+
+- **Repository/branch:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub` on
+  `fix/postgres-migration-constraint`, created from fast-forwarded `origin/main` at
+  `af865ae`.
+- **Root cause:** `ca8a1d34b622` created the unique constraint on
+  `followups.current_assessment_id` without an explicit name. PostgreSQL assigned
+  `followups_current_assessment_id_key`, while `5f31d8aee912` attempted to drop the
+  SQLite batch-convention name `uq_followups_current_assessment_id`.
+- **Fix:** `5f31d8aee912` now inspects the unique constraints, selects the exact one-column
+  constraint by `current_assessment_id`, uses the database-provided PostgreSQL name, and
+  retains the convention name only when SQLite reflects the constraint as unnamed. It
+  raises an explicit error when that constraint is missing or ambiguous.
+- **Regression coverage:** new `backend/tests/test_followup_migration.py` verifies the
+  PostgreSQL-generated name, SQLite unnamed fallback, and missing-constraint failure path.
+- **Validation:** focused migration tests **3 passed**; changed-file Ruff passed; full Ruff
+  passed; mypy passed for **91 source files**; backend suite **278 passed / 1 live test
+  deselected** with **91% coverage**; `pip check` passed. A disposable SQLite database
+  completed empty-to-head upgrade, downgrade to `ca8a1d34b622`, and re-upgrade to head.
+- **Safety:** no Neon/Render configuration, frontend file, environment file, secret,
+  database, or preserved local/untracked file was opened or modified. No live provider or
+  external database call ran. Nothing was staged, committed, pushed, merged, or deployed.
+- **Next action:** review the three-file diff, then stage/commit only after explicit user
+  approval. Suggested commit message: `fix(db): resolve PostgreSQL follow-up constraint`.
+
 ### Live Gemini request compatibility correction (2026-07-30)
 
 - **Repository:** `C:\Users\welcome\Desktop\Smart-Guide-Language-Delay-GitHub`
