@@ -188,7 +188,7 @@ describe("apiRequestBlob", () => {
     );
 
     const result = await apiRequestBlob("/api/v1/reports/r1/pdf");
-    expect(result).toBeInstanceOf(Blob);
+    expect(Object.prototype.toString.call(result)).toBe("[object Blob]");
     expect(result.type).toBe("application/pdf");
     expect(result.size).toBeGreaterThan(0);
     expect(await result.text()).toBe("%PDF-1.4");
